@@ -10,3 +10,8 @@ plugins:
     name: monitor
     desc: 系统监控守卫：当内存/CPU 过高时按阈值告警（演示 if/while + KV 记次）
     file: plugins/monitor.yml
+
+  - id: webguard
+    name: webguard
+    desc: 网站在线监测：设置监控 URL，定时探测 DOWN/UP 并累计记录失效/成功次数
+    file: plugins/webguard.yml

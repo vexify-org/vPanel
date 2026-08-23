@@ -1,0 +1,68 @@
+# webguard 插件：网站在线监测。
+# 演示 fetch/入参/KV 持久化/if-else 阈值与累计统计；任务定时探测并记录日志。
+name: webguard
+version: 1.0.0
+desc: 网站在线监测：设置监控 URL，定时探测 DOWN/UP 并累计记录失效/成功次数
+url: plugins/webguard.yml
+
+tools:
+  - id: set
+    desc: 设置要监控的 URL（KV 持久化保留）
+    params:
+      - id: url
+        name: URL
+        type: string
+        required: true
+        desc: 要监控的网址，如 https://example.com
+    script: |
+      kv_set("url", arg("url"))
+      ret("已设置监控 URL: " + arg("url"))
+
+  - id: status
+    desc: 立即探测一次，返回 DOWN/UP 与累计统计
+    script: |
+      url = kv_get("url")
+      if url == ""
+        ret("未设置监控 URL，请先用 set 工具设置")
+      end
+      body = fetch(url, 10)
+      head = substr(body, 0, 6)
+      if body == "" || head == "(fetch"
+        miss = atoi(kv_get("miss")) + 1
+        kv_set("miss", itoa(miss))
+        ret("DOWN（连续失效 " + itoa(miss) + " 次，URL " + url + "）")
+      else
+        hit = atoi(kv_get("hit")) + 1
+        kv_set("hit", itoa(hit))
+        ret("UP（累计成功 " + itoa(hit) + " 次，响应长度 " + itoa(len(body)) + "）")
+      end
+
+  - id: clear
+    desc: 清空监控 URL 与统计
+    script: |
+      kv_set("url", "")
+      kv_set("hit", "0")
+      kv_set("miss", "0")
+      ret("已清空监控配置与统计")
+
+tasks:
+  - id: probe
+    every: 30
+    desc: 每 30 秒探测一次并记录日志
+    script: |
+      url = kv_get("url")
+      if url == ""
+        log("未设置监控目标，跳过探测")
+      else
+        body = fetch(url, 10)
+        head = substr(body, 0, 6)
+        if body == "" || head == "(fetch"
+          miss = atoi(kv_get("miss")) + 1
+          kv_set("miss", itoa(miss))
+          log("DOWN " + url + " (#" + itoa(miss) + ")")
+        else
+          hit = atoi(kv_get("hit")) + 1
+          kv_set("hit", itoa(hit))
+          log("UP " + url + " x" + itoa(hit))
+        end
+      end
