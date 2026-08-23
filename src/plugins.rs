@@ -227,6 +227,134 @@ impl<'a> Builtin for CmdBuiltin<'a> {
     fn has_arg(&self, name: &str) -> bool {
         self.args.contains_key(name)
     }
+    fn post(&self, url: &str, body: &str) -> String {
+        // 写入临时文件作为请求体，避免命令行长度限制与转义问题。
+        let tf = std::env::temp_dir().join(format!("vpanel_post_{}.body", std::process::id()));
+        if std::fs::write(&tf, body).is_ok() {
+            let r = std::process::Command::new("curl")
+                .args(["-fsSL", "--max-time", "10", "-X", "POST", "-H", "Content-Type: application/json", "--data-binary", "@"])
+                .arg(&tf)
+                .arg(url)
+                .output();
+            let _ = std::fs::remove_file(&tf);
+            match r {
+                Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+                Ok(o) => format!("(http {}) {}", o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stderr).trim()),
+                Err(e) => format!("(post err) {}", e),
+            }
+        } else {
+            format!("(post err) cannot write body")
+        }
+    }
+    fn http_status(&self, url: &str) -> String {
+        match std::process::Command::new("curl")
+            .args(["-o", "/dev/null", "-s", "-w", "%{http_code}", "--max-time", "8", "-L", url])
+            .output()
+        {
+            Ok(o) => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+            Err(_) => "0".to_string(),
+        }
+    }
+    fn read_file(&self, path: &str) -> String {
+        std::fs::read_to_string(path).unwrap_or_default()
+    }
+    fn write_file(&self, path: &str, content: &str) -> bool {
+        std::fs::write(path, content).is_ok()
+    }
+    fn append_file(&self, path: &str, content: &str) -> bool {
+        use std::io::Write;
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .and_then(|mut f| f.write_all(content.as_bytes()).map(|_| f.sync_all()))
+            .is_ok()
+    }
+    fn ls(&self, path: &str) -> String {
+        let entries = match std::fs::read_dir(path) {
+            Ok(r) => r,
+            Err(_) => return String::new(),
+        };
+        let mut lines = Vec::new();
+        for ent in entries.flatten() {
+            let name = ent.file_name().to_string_lossy().into_owned();
+            let meta = ent.metadata();
+            let (ty, size) = match meta {
+                Ok(m) => {
+                    if m.is_dir() {
+                        ('d', m.len())
+                    } else if m.is_file() {
+                        ('f', m.len())
+                    } else {
+                        ('?', 0)
+                    }
+                }
+                Err(_) => ('?', 0),
+            };
+            lines.push(format!("{}\t{}\t{}", name, ty, size));
+        }
+        lines.join("\n")
+    }
+    fn file_info(&self, path: &str) -> String {
+        match std::fs::metadata(path) {
+            Ok(m) => {
+                let size = m.len();
+                let exists = "1";
+                let dir = if m.is_dir() { "1" } else { "0" };
+                format!("{};{};{}", size, exists, dir)
+            }
+            Err(_) => format!("0;0;0"),
+        }
+    }
+    fn lookup_ip(&self, host: &str) -> String {
+        use std::net::ToSocketAddrs;
+        format!("{}:80", host)
+            .to_socket_addrs()
+            .ok()
+            .and_then(|mut it| it.next())
+            .map(|a| a.ip().to_string())
+            .unwrap_or_default()
+    }
+    fn kill_pid(&self, pid: u32) -> bool {
+        // SIGTERM，给进程优雅退出的机会
+        std::process::Command::new("kill")
+            .arg("-TERM")
+            .arg(pid.to_string())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+    fn sha1(&self, path: &str) -> String {
+        match std::process::Command::new("sha1sum").arg(path).output() {
+            Ok(o) if o.status.success() => {
+                let s = String::from_utf8_lossy(&o.stdout);
+                s.split_whitespace().next().unwrap_or("-").to_string()
+            }
+            _ => "-".to_string(),
+        }
+    }
+    fn urlenc(&self, s: &str) -> String {
+        url_encode(s)
+    }
+}
+
+/// 极简 URL 编码（RFC 3986 保留字符与不安全字符转 %XX）。
+fn url_encode(s: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut out = String::with_capacity(s.len());
+    for &b in s.as_bytes() {
+        let c = b as char;
+        let keep = c.is_ascii_alphanumeric()
+            || matches!(c, '-' | '_' | '.' | '~');
+        if keep {
+            out.push(c);
+        } else {
+            out.push('%');
+            out.push(HEX[(b >> 4) as usize] as char);
+            out.push(HEX[(b & 0x0f) as usize] as char);
+        }
+    }
+    out
 }
 
 impl Plugins {

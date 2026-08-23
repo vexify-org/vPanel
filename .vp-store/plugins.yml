@@ -6,6 +6,27 @@ plugins:
     desc: 官方示例插件：条件/循环/参数/KV/文本数学/结构化返回
     file: plugins/demo.yml
 
+  # ---- v1.4.0 强力加强插件：基于增强微脚本语言（HTTP/文件/列表/进程/告警） ----
+  - id: http_watch
+    name: http_watch
+    desc: 批量 URL 可用性监控 + Webhook 告警（列表迭代 + http_status + post）
+    file: plugins/http_watch.yml
+
+  - id: file_snapshot
+    name: file_snapshot
+    desc: 关键文件哈希快照/篡改比对/自动备份（read_file + shasum + 列表迭代）
+    file: plugins/file_snapshot.yml
+
+  - id: proc_guard
+    name: proc_guard
+    desc: 进程守卫：内存超限自动终止 + webhook 通知 + 一键清缓存（kill + 列表迭代）
+    file: plugins/proc_guard.yml
+
+  - id: log_watch
+    name: log_watch
+    desc: 日志关键词实时监控 + 失败登录告警推送（read_file + count + post）
+    file: plugins/log_watch.yml
+
   # ---- v1.3.0 自制插件：系统监控 ----
   - id: mem_guard
     name: mem_guard

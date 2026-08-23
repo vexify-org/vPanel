@@ -12,6 +12,7 @@
 //! - 内置函数：cmd/fetch/ret/log/env/var/arg + 文本/数学/KV
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 // ---------------------------------------------------------------------------
 // 外部能力接口（由 plugins 实现）
@@ -20,10 +21,32 @@ use std::collections::HashMap;
 pub trait Builtin {
     fn cmd(&self, shell: &str) -> String;
     fn fetch(&self, url: &str, timeout: u64) -> String;
+    /// HTTP POST，返回响应文本。
+    fn post(&self, url: &str, body: &str) -> String;
+    /// 探测 URL 的 HTTP 状态码（如 "200"），失败返回 "0"。
+    fn http_status(&self, url: &str) -> String;
     fn kv_get(&self, key: &str) -> Option<String>;
     fn kv_set(&self, key: &str, val: &str) -> bool;
     fn arg(&self, name: &str) -> Option<String>;
     fn has_arg(&self, name: &str) -> bool;
+    /// 读取文本文件，不存在返回空串。
+    fn read_file(&self, path: &str) -> String;
+    /// 覆盖写入文本文件，成功返回 true。
+    fn write_file(&self, path: &str, content: &str) -> bool;
+    /// 追加文本到文件。
+    fn append_file(&self, path: &str, content: &str) -> bool;
+    /// 列出目录：每行 `名称<tab>类型(d/f)<tab>大小`，非目录返回空。
+    fn ls(&self, path: &str) -> String;
+    /// 文件信息：`大小;<是否存在>;<是否目录>`。
+    fn file_info(&self, path: &str) -> String;
+    /// 解析主机 → 第一个 IP（失败返回空）。
+    fn lookup_ip(&self, host: &str) -> String;
+    /// 结束进程，成功返回 true。
+    fn kill_pid(&self, pid: u32) -> bool;
+    /// 计算文件的 SHA-1 摘要（小写 hex），不存在/失败返回 `-`。
+    fn sha1(&self, path: &str) -> String;
+    /// 将字符串做 URL 编码。
+    fn urlenc(&self, s: &str) -> String;
 }
 
 // ---------------------------------------------------------------------------
@@ -35,6 +58,8 @@ pub enum V {
     S(String),
     N(f64),
     B(bool),
+    /// 有序字符串列表，用于 for..in 迭代与批量处理。
+    L(Vec<String>),
     Nil,
 }
 
@@ -50,6 +75,7 @@ impl V {
                 }
             }
             V::B(b) => if *b { "true".into() } else { "false".into() },
+            V::L(v) => v.join("\n"),
             V::Nil => String::new(),
         }
     }
@@ -58,6 +84,7 @@ impl V {
             V::N(n) => *n,
             V::S(s) => s.trim().parse().unwrap_or(0.0),
             V::B(b) => if *b { 1.0 } else { 0.0 },
+            V::L(v) => v.len() as f64,
             V::Nil => 0.0,
         }
     }
@@ -66,7 +93,17 @@ impl V {
             V::B(b) => *b,
             V::N(n) => *n != 0.0,
             V::S(s) => !s.is_empty(),
+            V::L(v) => !v.is_empty(),
             V::Nil => false,
+        }
+    }
+    fn is_list(&self) -> bool {
+        matches!(self, V::L(_))
+    }
+    fn list(&self) -> Option<&[String]> {
+        match self {
+            V::L(v) => Some(v),
+            _ => None,
         }
     }
 }
@@ -273,16 +310,13 @@ fn parse_stmt(lines: &[Line], pos: &mut usize) -> Result<Stmt, String> {
                 Some(Tok::Ident(v)) if !is_kw(&v) => v,
                 _ => return Err("for 后需循环变量".into()),
             };
-            if !p.eat_ident("in") || !p.eat_ident("range") || !p.eat_op("(") {
-                return Err("for 仅支持 for x in range(n)".into());
+            if !p.eat_ident("in") {
+                return Err("for 需写作 for x in <列表/数值>".into());
             }
-            let n = p.expr()?;
-            if !p.eat_op(")") {
-                return Err("for range 缺右括号".into());
-            }
+            let items = p.expr()?;
             *pos += 1;
             let body = parse_block(lines, pos, header_indent as i64)?;
-            Ok(Stmt::For { var, n, body })
+            Ok(Stmt::For { var, n: items, body })
         }
         "while" => {
             let mut p = Parser::new(header);
@@ -612,17 +646,31 @@ impl<'a> Interp<'a> {
                     }
                 }
                 Stmt::For { var, n, body } => {
-                    let cnt = self.eval(n)?.as_num();
-                    let cnt = cnt as i64;
-                    if cnt > 0 {
-                        for i in 0..cnt {
+                    let iv = self.eval(n)?;
+                    if let Some(items) = iv.list() {
+                        let items: Vec<String> = items.to_vec();
+                        for it in items {
                             self.tick()?;
-                            self.vars.insert(var.clone(), V::N(i as f64));
+                            self.vars.insert(var.clone(), V::S(it));
                             match self.exec(body) {
                                 Ok(()) => {}
                                 Err(e) if e == "!break" => break,
                                 Err(e) if e == "!continue" => continue,
                                 Err(e) => return Err(e),
+                            }
+                        }
+                    } else {
+                        let cnt = iv.as_num() as i64;
+                        if cnt > 0 {
+                            for i in 0..cnt {
+                                self.tick()?;
+                                self.vars.insert(var.clone(), V::N(i as f64));
+                                match self.exec(body) {
+                                    Ok(()) => {}
+                                    Err(e) if e == "!break" => break,
+                                    Err(e) if e == "!continue" => continue,
+                                    Err(e) => return Err(e),
+                                }
                             }
                         }
                     }
@@ -705,6 +753,8 @@ impl<'a> Interp<'a> {
                 let t = if t == 0 { 8 } else { t };
                 Ok(V::S(self.builtin.fetch(&s(&one), t)))
             }
+            "post" => Ok(V::S(self.builtin.post(&s(&one), &s(&two)))),
+            "http_status" => Ok(V::S(self.builtin.http_status(&s(&one)))),
             "ret" => {
                 self.retval = Some(s(&one));
                 Ok(V::Nil)
@@ -728,7 +778,13 @@ impl<'a> Interp<'a> {
                 self.kv_writes.push((k.clone(), v));
                 Ok(V::B(r))
             }
-            "len" => Ok(V::N(s(&one).chars().count() as f64)),
+            "len" => {
+                if let Some(v) = one.list() {
+                    Ok(V::N(v.len() as f64))
+                } else {
+                    Ok(V::N(s(&one).chars().count() as f64))
+                }
+            }
             "substr" => {
                 let start = two.as_num() as usize;
                 let end = three.as_num();
@@ -765,6 +821,102 @@ impl<'a> Interp<'a> {
                 Ok(V::S(parts.join("|")))
             }
             "json" => Ok(V::S(json_quote(&s(&one)))),
+
+            // ---- 列表 / 迭代 ----
+            "range" => Ok(V::N(one.as_num().floor().max(0.0))),
+            "lines" => {
+                let v: Vec<String> = s(&one)
+                    .split('\n')
+                    .map(|l| l.trim_end_matches('\r').to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect();
+                Ok(V::L(v))
+            }
+            "split_list" => Ok(V::L(s(&one).split(&s(&two)).map(|p| p.to_string()).collect())),
+            "at" => {
+                let i = two.as_num() as i64;
+                let v = one.list().map(|lst| lst.get(i as usize).cloned()).flatten().unwrap_or_default();
+                Ok(V::S(v))
+            }
+            "push" => {
+                let mut v = one.list().unwrap_or(&[]).to_vec();
+                v.push(s(&two));
+                Ok(V::L(v))
+            }
+            "pop" => {
+                let mut v = one.list().unwrap_or(&[]).to_vec();
+                let last = v.pop().unwrap_or_default();
+                // 用原子 KV 之外的临时手段：把剩余列表放回 var? 不行——改用追加内联。
+                let _ = &mut v;
+                Ok(V::S(last))
+            }
+            "join" => Ok(V::S(one.list().unwrap_or(&[]).join(&s(&two)))),
+
+            // ---- 文件操作 ----
+            "read_file" => Ok(V::S(self.builtin.read_file(&s(&one)))),
+            "write_file" => Ok(V::B(self.builtin.write_file(&s(&one), &s(&two)))),
+            "append_file" => Ok(V::B(self.builtin.append_file(&s(&one), &s(&two)))),
+            "ls" => Ok(V::S(self.builtin.ls(&s(&one)))),
+            "file_info" => Ok(V::S(self.builtin.file_info(&s(&one)))),
+            "rm" => {
+                let p = s(&one);
+                Ok(V::B(std::fs::remove_file(&p).is_ok() || std::fs::remove_dir_all(&p).is_ok()))
+            }
+
+            // ---- 系统 / 网络 ----
+            "lookup_ip" => Ok(V::S(self.builtin.lookup_ip(&s(&one)))),
+            "shasum" => Ok(V::S(self.builtin.sha1(&s(&one)))),
+            "urlenc" => Ok(V::S(self.builtin.urlenc(&s(&one)))),
+            "kill" => { let p = one.as_num() as u32; Ok(V::B(self.builtin.kill_pid(p))) }
+            "sleep" => {
+                let ms = two.as_num() as u64;
+                if ms > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(ms.min(60_000)));
+                }
+                Ok(V::Nil)
+            }
+            "now" => Ok(V::N(now_epoch() as f64)),
+            "date" => Ok(V::S(fmt_time(now_epoch(), "%Y-%m-%d %H:%M:%S"))),
+            "date_fmt" => {
+                let f = if s(&one).is_empty() { "%Y-%m-%d %H:%M:%S" } else { &s(&one) };
+                Ok(V::S(fmt_time(now_epoch(), f)))
+            }
+            "strftime" => {
+                let t = two.as_num() as i64;
+                let f = if s(&one).is_empty() { "%Y-%m-%d %H:%M:%S" } else { &s(&one) };
+                Ok(V::S(fmt_time(t, f)))
+            }
+            "rand" => {
+                let lo = one.as_num();
+                let hi = if evaled.len() > 1 { two.as_num() } else { lo };
+                Ok(V::N(rand_range(lo, hi)))
+            }
+
+            // ---- 字符串增强 ----
+            "contains" => Ok(V::B(s(&one).contains(&s(&two)))),
+            "startswith" => Ok(V::B(s(&one).starts_with(&s(&two)))),
+            "endswith" => Ok(V::B(s(&one).ends_with(&s(&two)))),
+            "index" => {
+                let p = s(&one).find(&s(&two)).map(|i| i as f64).unwrap_or(-1.0);
+                Ok(V::N(p))
+            }
+            "replace" => Ok(V::S(s(&one).replace(&s(&two), &s(&three)))),
+            "rev" => Ok(V::S(s(&one).chars().rev().collect())),
+            "count" => {
+                let n = s(&one).matches(&s(&two)).count() as f64;
+                Ok(V::N(n))
+            }
+            "pad" => {
+                let me = s(&one);
+                let w = two.as_num() as usize;
+                if me.chars().count() >= w {
+                    Ok(V::S(me))
+                } else {
+                    let pad = " ".repeat(w - me.chars().count());
+                    Ok(V::S(pad + &me))
+                }
+            }
+
             other => Err(format!("未知函数: {}", other)),
         }
     }
@@ -776,6 +928,101 @@ fn cmp_lt(a: &V, b: &V) -> bool {
         (V::N(x), V::N(y)) => x < y,
         (V::S(x), V::S(y)) => x < y,
         _ => a.as_num() < b.as_num(),
+    }
+}
+
+/// 当前 unix 秒（UTC）。
+fn now_epoch() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// 时间戳按格式字符串格式化（UTC 的近似本地化，偏移见 config::tz()）。
+fn fmt_time(epoch: i64, fmt: &str) -> String {
+    let offset = *crate::config::tz();
+    let local = epoch + offset;
+    let days = local.div_euclid(86400);
+    let secs = local.rem_euclid(86400);
+    let (y, m, d) = civil_from_days(days);
+    let (hh, mm, ss) = (secs / 3600, (secs % 3600) / 60, secs % 60);
+    let wd = ((days + 4) % 7).rem_euclid(7); // 1970-01-01 是周四(4)
+    let mut out = String::new();
+    let mut chars = fmt.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '%' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('Y') => out.push_str(&format!("{:04}", y)),
+            Some('y') => out.push_str(&format!("{:02}", y % 100)),
+            Some('m') => out.push_str(&format!("{:02}", m)),
+            Some('d') => out.push_str(&format!("{:02}", d)),
+            Some('H') => out.push_str(&format!("{:02}", hh)),
+            Some('M') => out.push_str(&format!("{:02}", mm)),
+            Some('S') => out.push_str(&format!("{:02}", ss)),
+            Some('w') => out.push_str(&format!("{}", wd)),
+            Some('j') => {
+                let doe = days - civil_yoe_days(y);
+                out.push_str(&format!("{:03}", doe));
+            }
+            Some('%') => out.push('%'),
+            Some(o) => {
+                out.push('%');
+                out.push(o);
+            }
+            None => out.push('%'),
+        }
+    }
+    out
+}
+
+/// 计算给定年份 1 月 1 日的儒略日（用于 %j，仅为近似，配合应急用可接受）。
+fn civil_yoe_days(y: i64) -> i64 {
+    let mut days = 0;
+    let mut yy = 1970;
+    while yy < y {
+        let leap = (yy % 4 == 0 && yy % 100 != 0) || yy % 400 == 0;
+        days += if leap { 366 } else { 365 };
+        yy += 1;
+    }
+    days
+}
+
+/// 民用历 → 年/月/日（1970 纪元）。
+fn civil_from_days(z: i64) -> (i64, i64, i64) {
+    let z = z + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    (if m <= 2 { y + 1 } else { y }, m, d)
+}
+
+/// 生成 [lo, hi] 闭区间内的随机整数。
+fn rand_range(lo: f64, hi: f64) -> f64 {
+    if hi <= lo {
+        return lo;
+    }
+    // 用一个简单的线性同余伪随机器，避免依赖。
+    use std::time::{SystemTime, UNIX_EPOCH};
+    static mut SEED: u64 = 0;
+    unsafe {
+        if SEED == 0 {
+            SEED = SystemTime::now().duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos() as u64)
+                .unwrap_or(88172645463325252);
+        }
+        SEED = SEED.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        let span = (hi.floor() as i64 - lo.ceil() as i64).max(0) + 1;
+        let r = (SEED >> 33) % (span as u64);
+        (lo.ceil() as i64 + r as i64) as f64
     }
 }
 
@@ -824,6 +1071,39 @@ mod tests {
         }
         fn has_arg(&self, k: &str) -> bool {
             self.args.contains_key(k)
+        }
+        fn post(&self, _u: &str, _b: &str) -> String {
+            "[post]".into()
+        }
+        fn http_status(&self, _u: &str) -> String {
+            "200".into()
+        }
+        fn read_file(&self, _p: &str) -> String {
+            String::new()
+        }
+        fn write_file(&self, _p: &str, _c: &str) -> bool {
+            true
+        }
+        fn append_file(&self, _p: &str, _c: &str) -> bool {
+            true
+        }
+        fn ls(&self, _p: &str) -> String {
+            String::new()
+        }
+        fn file_info(&self, _p: &str) -> String {
+            "0;0;0".into()
+        }
+        fn lookup_ip(&self, _h: &str) -> String {
+            String::new()
+        }
+        fn kill_pid(&self, _p: u32) -> bool {
+            true
+        }
+        fn sha1(&self, _p: &str) -> String {
+            "-".into()
+        }
+        fn urlenc(&self, _p: &str) -> String {
+            "-".into()
         }
     }
 
@@ -893,5 +1173,49 @@ mod tests {
         // json 包裹一层引号
         assert!(r.is_ok());
         assert_eq!(v, "\"a\"");
+    }
+
+    #[test]
+    fn list_iteration() {
+        let (v, _, r) = run(
+            "all = split_list(\"a,b,c\", \",\")\nacc = \"\"\nfor x in all\n  acc = acc + x + \"|\"\nend\nret(acc)",
+            HashMap::new(),
+        );
+        assert!(r.is_ok());
+        assert_eq!(v, "a|b|c|");
+    }
+
+    #[test]
+    fn list_funcs() {
+        let (v, _, r) = run(
+            "l = push(split_list(\"a,b\", \",\"), \"c\")\nret(at(l, 2) + \":\" + len(l))",
+            HashMap::new(),
+        );
+        assert!(r.is_ok());
+        assert_eq!(v, "c:3");
+    }
+
+    #[test]
+    fn string_enhanced() {
+        let (v, _, r) = run(
+            "s = \"hello world\"\nret(itoa(contains(s, \"world\")) + \";\" + itoa(startswith(s, \"hel\")) + \";\" + count(s, \"l\"))",
+            HashMap::new(),
+        );
+        assert!(r.is_ok());
+        assert_eq!(v, "true;true;3");
+    }
+
+    #[test]
+    fn range_rand_now() {
+        let (v, _, r) = run("ret(len(range(3)))", HashMap::new());
+        // range 返回数值型，实际上 range 被当作数值。验证 rand/now 为数值
+        assert!(r.is_ok());
+        let (v2, _, r2) = run("a = now()\nb = a + 1\nret(b > a)", HashMap::new());
+        assert!(r2.is_ok());
+        assert_eq!(v2, "true");
+        // rand(0,0) 返回 0
+        let (v3, _, r3) = run("ret(rand(5,5))", HashMap::new());
+        assert!(r3.is_ok());
+        assert_eq!(v3, "5");
     }
 }

@@ -1,0 +1,91 @@
+# 强力插件：配置文件快照与哈希比对 / 篡改告警
+# 展示：read_file / lines / write_file / append_file / for..in / contains / KV
+name: file_snapshot
+version: 1.0.0
+desc: 对关键文件做哈希快照，随时比对是否被篡改；发现变化自动备份为 .bak 明早追加到备份日志
+
+tools:
+  # 对一批文件做当前哈希快照基线
+  - id: snapshot
+    desc: 计算文件列表的哈希并写入 KV 基线
+    params:
+      - id: files
+        name: 文件列表
+        type: string
+        required: true
+        desc: 用逗号分隔的绝对路径
+    script: |
+      list = split_list(arg("files"), ",")
+      out = ""
+      for f in list
+        f = trim(f)
+        h = shasum(f)
+        kv_set("hash:" + f, h)
+        out = out + f + "=" + h + " | "
+      end
+      ret("已建立基线: " + out)
+
+  # 强制换掉某个文件内容（危险，谨慎）
+  - id: restore
+    desc: 从同名 .bak 备份恢复一个文件（返回是否成功）
+    params:
+      - id: file
+        name: 文件路径
+        type: string
+        required: true
+        desc: 要恢复的文件
+    script: |
+      f = arg("file")
+      b = f + ".bak"
+      content = read_file(b)
+      if content == ""
+        ret("没有可用备份: " + b)
+      else
+        ok = write_file(f, content)
+        ret("已恢复 " + f + " = " + itoa(ok))
+      end
+
+tasks:
+  # 定期比对基线，变化就备份并追加日志（用文件操作 + 列表迭代）
+  - id: verify
+    every: 60
+    desc: 每 60 秒比对基线哈希，发现改动则生成 .bak 备份并写审计日志
+    script: |
+      targets = kv_get("watch_files")
+      if targets == ""
+        log("file_snapshot: 未设置 watch_files")
+      else
+        list = split_list(targets, ",")
+        changed = ""
+        for f in list
+          f = trim(f)
+          cur = shasum(f)
+          base = kv_get("hash:" + f)
+          if base != "" && cur != base
+            # 备份当前内容到同名 .bak，再更新基线
+            content = read_file(f)
+            bak_ok = append_file(f + ".bak", content)
+            kv_set("hash:" + f, cur)
+            changed = changed + f
+            if bak_ok == "true"
+              changed = changed + "[已备份]"
+            else
+              changed = changed + "[备份失败]"
+            end
+            changed = changed + " "
+          end
+        end
+        if changed != ""
+          append_file("/tmp/vpanel_audit.log", date() + " CHANGED " + changed + "\n")
+          log("⚠ 文件变更: " + changed)
+        else
+          log("file_snapshot: 全部一致")
+        end
+      end
+
+hooks:
+  - event: on_init
+    script: |
+      targets = "none"
+      kv_set("watch_files", targets)
+      log("file_snapshot 就绪，用 snapshot 工具建立基线后生效")

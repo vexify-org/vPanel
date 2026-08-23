@@ -1,0 +1,61 @@
+# 强力插件：日志关键词实时监控 + 微信/server酱/自定义 Webhook 通知
+# 展示：read_file / lines / for..in / contains / count / post / urlenc / KV
+name: log_watch
+version: 1.0.0
+desc: 轮询日志文件中出现的关键词，抓到即计数并通过 Webhook(POST) 通知
+
+tools:
+  # 扫描一个日志文件里的关键词出现次数
+  - id: scan
+    desc: 在给定日志文件中统计各关键词出现次数并返回结构化信息
+    params:
+      - id: file
+        name: 日志文件
+        type: string
+        required: true
+        desc: 绝对路径
+      - id: kw
+        name: 关键词
+        type: string
+        required: true
+        desc: 用逗号分隔的多个关键词
+    script: |
+      f = arg("file")
+      kws = split_list(arg("kw"), ",")
+      content = read_file(f)
+      if content == ""
+        ret("读取不到日志: " + f)
+      else
+        out = "文件 " + f + " 大小 " + file_info(f) + "\n"
+        for kw in kws
+          kw = trim(kw)
+          cnt = itoa(count(content, kw))
+          out = out + kw + "=" + cnt + " | "
+        end
+        ret(out)
+      end
+
+tasks:
+  # 轮询日志，发现关键词上升就通知
+  - id: poll
+    every: 30
+    desc: 轮询 /var/log/auth.log 中的 Failed password，出现即记录并推送到 webhook
+    script: |
+      f = "/var/log/auth.log"
+      content = read_file(f)
+      if content != ""
+        base = kv_get("auth_poll_count")
+        cur = itoa(count(content, "Failed password"))
+        if base == ""
+          base = "0"
+        end
+        if atoi(cur) > atoi(base)
+          log("⚠ 检测到 " + itoa(atoi(cur) - atoi(base)) + " 次新的失败登录")
+          wh = kv_get("webhook")
+          if wh != ""
+            body = json("{\"msg\":\"新增失败登录 " + itoa(atoi(cur) - atoi(base)) + " 次\",\"ts\":\"" + date() + "\"}")
+            post(wh, body)
+          end
+        end
+        kv_set("auth_poll_count", cur)
+      end

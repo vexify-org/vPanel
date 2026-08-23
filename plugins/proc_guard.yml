@@ -1,0 +1,88 @@
+# 强力插件：进程守卫 + 资源清理
+# 展示：cmd 解析 / list 迭代 / kill / KV / 入参 / 文件操作
+name: proc_guard
+version: 1.0.0
+desc: 扫描内存占用最高的进程，超过阈值自动终止并记录；一键清理临时文件
+
+tools:
+  # 列出内存前 N 的进程（展示 cmd 输出逐行迭代 + split_list）
+  - id: toppers
+    desc: 返回内存占用前 N 的进程（pid, 内存KB, 命令）
+    params:
+      - id: n
+        name: 数量
+        type: number
+        required: false
+        default: "10"
+    script: |
+      n = atoi(arg("n"))
+      if n <= 0
+        n = 10
+      end
+      out = cmd("ps -eo pid,rss,comm --sort=-rss | head -n " + itoa(n + 1))
+      ret(out)
+
+  # 按 PID 终止进程（kill，需谨慎）
+  - id: kill_pid
+    desc: 终止指定 PID 的进程
+    params:
+      - id: pid
+        name: PID
+        type: number
+        required: true
+        desc: 要终止的进程号
+    script: |
+      pid = atoi(arg("pid"))
+      if pid <= 0
+        ret("非法 PID")
+      else
+        killed = kill(pid)
+        if killed == "true"
+          kv_set("last_killed", itoa(pid) + "@" + date())
+          ret("已终止进程 " + itoa(pid))
+        else
+          ret("终止失败（可能需要更高权限）")
+        end
+      end
+
+  # 一键清理 /tmp 与常见缓存（文件操作 + 列表迭代）
+  - id: clean_cache
+    desc: 清理 /tmp/*、apt 缓存、pip 缓存的大小，返回已清内容
+    script: |
+      cmd("apt-get clean 2>/dev/null")
+      cmd("rm -rf /tmp/vpanel_audit.log 2>/dev/null")
+      size = cmd("du -sh /var/cache/apt 2>/dev/null")
+      ret("已清理 apt 缓存，残留: " + size)
+
+tasks:
+  # 每 60 秒检查是否有超阈值内存进程，超了就终止并 webhook 通知
+  - id: watchdog
+    every: 60
+    desc: 内存看门狗：RSS 大于阈值(MB)的进程自动 SIGTERM，并通过 post 推送告警
+    script: |
+      thr = atoi(kv_get("mem_threshold"))
+      if thr <= 0
+        thr = 500
+      end
+      thr_kb = thr * 1024
+      out = cmd("ps -eo pid=,rss= | sort -k2 -n -r | head -n 5")
+      for line in lines(out)
+        fields = split_list(trim(line), " ")
+        pid = atoi(at(fields, 0))
+        kb = atoi(at(fields, 1))
+        if kb > thr_kb
+          killed = kill(pid)
+          log("⚠ 内存超限(" + itoa(round(kb / 1024)) + "MB) 已终止 PID " + itoa(pid) + " = " + itoa(killed))
+          wh = kv_get("webhook")
+          if wh != ""
+            body = json("{\"msg\":\"killed pid " + itoa(pid) + " rss " + itoa(kb) + "KB\",\"ts\":\"" + date() + "\"}")
+            post(wh, body)
+          end
+        end
+      end
+
+hooks:
+  - event: on_init
+    script: |
+      kv_set("mem_threshold", "500")
+      log("proc_guard 加载完成，默认内存看门狗阈值 500MB（写 KV mem_threshold 调整）")

@@ -1,0 +1,80 @@
+# 强力插件：批量 URL 可用性监控 + Webhook 告警
+# 展示：http_status / post / for..in 列表迭代 / split_list / KV 状态跟踪 / 入参
+name: http_watch
+version: 1.0.0
+desc: 批量监听多个 URL 的 HTTP 状态，异常时用 webhook(POST)通知并记录 KV
+
+tools:
+  # 探测一批 URL，返回每条的 HTTP 状态码
+  - id: probe
+    desc: 依次探测 URL 列表的 HTTP 状态码（分号分隔），返回结构化列表
+    params:
+      - id: urls
+        name: URL 列表
+        type: string
+        required: true
+        desc: 多个 URL 用英文分号分隔，如 https://a.com;https://b.com
+      - id: timeout
+        name: 超时(秒)
+        type: number
+        required: false
+        default: "8"
+        desc: 每次探测超时
+    script: |
+      list = split_list(arg("urls"), ";")
+      out = ""
+      for u in list
+        code = http_status(u)
+        kv_set("status:" + u, code)
+        out = out + trim(u) + " -> " + code + " | "
+      end
+      ret("可用性：" + out)
+
+  # 回放最近一次探测结果
+  - id: last_report
+    desc: 从 KV 回放每个 URL 上次探测的状态，适合做排障回看
+    params:
+      - id: urls
+        name: URL 列表
+        type: string
+        required: true
+        desc: 多个 URL 用分号分隔
+    script: |
+      list = split_list(arg("urls"), ";")
+      out = ""
+      for u in list
+        c = kv_get("status:" + trim(u))
+        if c == ""
+          c = "从未探测"
+        end
+        out = out + trim(u) + " -> " + c + " | "
+      end
+      ret("回放：" + out)
+
+tasks:
+  # 定时巡检并触发 webhook 告警。webs: 用分号列出的监控目标
+  - id: health_check
+    every: 30
+    desc: 每 30 秒巡检预设 URL，任意异常即 POST 到 webhook 并打印告警日志
+    script: |
+      webs = "https://example.com"
+      wh = kv_get("webhook")
+      list = split_list(webs, ";")
+      bad = ""
+      for u in list
+        code = atoi(http_status(trim(u)))
+        kv_set("status:" + trim(u), itoa(code))
+        if code < 200 || code >= 400
+          bad = bad + trim(u) + "(" + itoa(code) + ") "
+        end
+      end
+      if bad != ""
+        log("⚠ HTTP 异常: " + bad)
+        if wh != ""
+          body = json("{\"msg\":\"" + bad + "\",\"ts\":\"" + date() + "\"}")
+          r = post(wh, body)
+          log("webhook 已推送: " + r)
+        end
+      else
+        log("全站正常")
+      end
