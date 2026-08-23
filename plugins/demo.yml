@@ -1,0 +1,39 @@
+# vPanel 示例插件：演示微脚本语言各能力。
+# 放任意 *.yml 到 plugins/ 目录即可被加载。
+name: demo
+version: 1.0.0
+desc: 示例插件，演示 cmd/fetch/ret/log、周期任务与事件钩子
+
+tools:
+  - id: uptime
+    desc: 显示系统运行时长
+    script: |
+      # 变量赋值 + cmd 执行 + 拼接 + ret 返回
+      now = cmd("uptime -p")
+      host = cmd("hostname")
+      ret("主机 {host} 已运行 {now}")
+
+  - id: distinfo
+    desc: 查询发行版信息
+    script: |
+      os = cmd("grep PRETTY_NAME /etc/os-release | cut -d= -f2")
+      kern = cmd("uname -r")
+      ret("系统: {os} | 内核: {kern}")
+
+  - id: fetch_test
+    desc: 测试 fetch() 拉取（走 curl，支持 HTTPS）
+    script: |
+      body = fetch("https://example.com", 5)
+      ret("fetch 返回(截断): " + body)
+
+tasks:
+  - id: heartbeat
+    every: 10
+    desc: 每 10 秒打印一次心跳
+    script: |
+      log("插件心跳 tick=" + cmd("date \"+%H:%M:%S\""))
+
+hooks:
+  - event: on_init
+    script: |
+      log("插件 demo 加载完成 on_init 已触发")

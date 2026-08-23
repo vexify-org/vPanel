@@ -12,6 +12,38 @@ pub struct Config {
     pub shell: Shell,
     #[serde(default)]
     pub download: Download,
+    #[serde(default)]
+    pub plugins: Plugins,
+}
+
+/// 插件系统配置。
+#[derive(Debug, Clone, Deserialize)]
+pub struct Plugins {
+    /// 插件目录（相对运行目录）。默认 `plugins`。
+    #[serde(default = "d_plugin_dir")]
+    pub dir: String,
+}
+
+impl Default for Plugins {
+    fn default() -> Self {
+        Plugins { dir: d_plugin_dir() }
+    }
+}
+
+/// 当前时区偏移（秒），默认 +8（Asia/Shanghai），可用环境变量 TZ_OFFSET 覆盖。
+static TZ: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
+
+pub fn tz() -> &'static i64 {
+    TZ.get_or_init(|| {
+        std::env::var("TZ_OFFSET")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(28800)
+    })
+}
+
+fn d_plugin_dir() -> String {
+    "plugins".to_string()
 }
 
 /// 下载 / 加速配置。
@@ -124,6 +156,7 @@ impl Default for Config {
             },
             shell: Shell::default(),
             download: Download::default(),
+            plugins: Plugins::default(),
         }
     }
 }

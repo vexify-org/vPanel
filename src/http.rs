@@ -28,12 +28,15 @@ pub struct State {
     pub cfg: Config,
     pub monitor: Arc<crate::system::Monitor>,
     pub shop: Arc<crate::shop::Shop>,
+    pub plugins: Arc<crate::plugins::Plugins>,
 }
 
 /// 启动监听并派发工作线程。阻塞运行，直到进程退出。
 pub fn serve(cfg: Config) -> std::io::Result<()> {
     let monitor = crate::system::Monitor::start();
     let shop = crate::shop::Shop::new();
+    let plugins = crate::plugins::Plugins::new();
+    plugins.load(&cfg); // 从 plugins 目录加载插件 + 启动定时线程
     let addr = format!("{}:{}", cfg.server.bind, cfg.server.port);
     let listener = TcpListener::bind(&addr)?;
     listener.set_nonblocking(true)?;
@@ -46,6 +49,7 @@ pub fn serve(cfg: Config) -> std::io::Result<()> {
         cfg,
         monitor,
         shop,
+        plugins,
     });
 
     // 有界队列：高并发时连接在此排队或直接拒绝，内存不随之膨胀。
@@ -126,6 +130,9 @@ fn handle(stream: &mut TcpStream, state: &State) {
     let mut wt = line.split_whitespace();
     let method = wt.next().unwrap_or("GET").to_string();
     let target = wt.next().unwrap_or("/");
+
+    // 插件事件钩子：每个进入的 HTTP 请求（慎用，脚本里勿放慢操作）。
+    state.plugins.run_hooks("on_http_request");
 
     // Web Socket 与会话式终端：升级为长连接并驱动 PTY。
     if target == "/ws" {

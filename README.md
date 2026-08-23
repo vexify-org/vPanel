@@ -32,7 +32,8 @@ cargo build --release
 | 防火墙 | 基于 `ufw` 的端口放行 / 删除 |
 | 定时任务 | 基于 `crontab` 的增删查 |
 | 软件商店 | 一键装常用软件，下载统一走加速前缀；清单可从远程仓库（`vp-store`）实时拉取，失败回退内置清单 |
-| AI 工具 | 内置 `/mcp` 端点（MCP Streamable HTTP），AI 客户端可接线调用上述能力 |
+| 插件 | 极简 DSL（YAML）+ 自研微脚本语言；工具注入前端与 MCP、自带定时任务、20 个事件钩子 |
+| AI 工具 | 内置 `/mcp` 端点（MCP Streamable HTTP），AI 客户端可接线调用上述能力（含插件工具） |
 | Web 终端 | WebSocket + PTY，浏览器内本地 Shell 控制（按需连接） |
 | 心跳 | `/health` 返回 `ok`，`/metrics` 返回请求/并发/内存统计 |
 
@@ -43,8 +44,40 @@ cargo build --release
 面板内置一个基于 MCP（Model Context Protocol）Streamable HTTP 的端点：`POST /mcp`。
 
 - 支持 `initialize`、`tools/list`、`tools/call`。
-- 在 Claude / Cursor 等客户端添加 MCP 服务器并指向 `http://<host>:8080/mcp`，AI 即可调用：系统监控、进程（含结束）、服务（启停重启）、防火墙端口、定时任务。
+- 在 Claude / Cursor 等客户端添加 MCP 服务器并指向 `http://<host>:8080/mcp`，AI 即可调用：系统监控、进程（含结束）、服务（启停重启）、防火墙端口、定时任务，以及所有插件工具（工具名形如 `p_<插件>_<工具>`）。
 - 前端「AI 工具」页提供连接地址、工具自检与工具调用测试。
+
+### 插件（极简 DSL + 微脚本语言）
+
+插件用 YAML 描述，放到插件目录（默认 `plugins/`）即自动加载；脚本用自研的微语言（单行语句、字符串/变量/`+` 拼接），内置函数：
+
+- `cmd("...")` 执行 shell 命令并捕获输出
+- `fetch("url"[, timeout])` HTTP 拉取（走 curl，支持 HTTPS）
+- `ret("...")` 标记脚本返回值
+- `log("...")` 写入面板插件日志
+
+示例插件 `plugins/demo.yml`：
+
+```yaml
+name: demo
+version: 1.0.0
+desc: 示例插件
+tools:
+  - id: uptime                 # 暴露为 /api/plugin/demo/uptime 与 MCP 的 p_demo_uptime
+    desc: 显示系统运行时长
+    script: |
+      host = cmd("hostname")
+      ret("主机 {host}")
+tasks:                          # 面板自带周期任务（不依赖 crontab）
+  - id: heartbeat
+    every: 10
+    script: |
+      log("心跳 " + cmd("date \"+%H:%M:%S\""))
+hooks:                          # 20 个事件钩子之一（on_init / on_tick / on_http_request ...）
+  - event: on_init
+    script: |
+      log("插件已加载")
+```
 
 ## 配置
 
@@ -73,6 +106,9 @@ shell:               # Web 终端
 download:              # 软件商店
   accel: "https://g.z321.cc.cd/"     # 全局下载加速前缀
   store: "vexify-org/vp-store@main"  # 清单仓库（owner/repo@branch）
+
+plugins:
+  dir: "plugins"        # 插件目录，放 *.yml 即自动加载
 ```
 
 ## 内存设计

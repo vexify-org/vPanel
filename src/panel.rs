@@ -128,8 +128,8 @@ form.rowform{display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wr
 <div class="toast" id="toast"></div>
 <script>
 var ACCENT='__ACCENT__', SHELL_ON=__SHELL_ON__;
-var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务",shop:"软件商店",mcp:"AI 工具"};
-var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["fw","安全"],["tk","定时"],["shop","商店"],["mcp","AI"]];
+var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务",shop:"软件商店",mcp:"AI 工具",plg:"插件"};
+var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["fw","安全"],["tk","定时"],["shop","商店"],["mcp","AI"],["plg","插件"]];
 if(SHELL_ON)TABS.push(["term","终端"]);
 var cur="ov";
 
@@ -145,7 +145,7 @@ function choose(){window.clearInterval(window._iv);$('ttl').textContent=TITLES[c
   if(cur==='term'){$('view').innerHTML='<div class="card" style="text-align:center;padding:40px"><a class="pri" style="text-decoration:none;display:inline-block" href="/term">&#9654; 打开 Web 终端</a></div>';return}
   if(cur==='ov'){loadOv();window._iv=setInterval(loadOv,2000)}
   if(cur==='ps')loadPs(); if(cur==='sv')loadSv(); if(cur==='fw')loadFw(); if(cur==='tk')loadTk();
-  if(cur==='shop')loadShop(); if(cur==='mcp')loadMCP();
+  if(cur==='shop')loadShop(); if(cur==='mcp')loadMCP(); if(cur==='plg')loadPlug();
 }
 
 function chart(cid){return {id:cid,path:"",draw:function(arr,color,max){var v=$('svg#c'+cid);if(!v)return;var w=v.clientWidth||300,h=v.clientHeight||120,n=arr.length;if(!n)return;var pad=2;function px(arr){var t="";for(var i=0;i<n;i++){var x=pad+(i/(n-1))*(w-2*pad);var val=Math.min(arr[i]||0,max||100);var y=h-pad-(h-2*pad)*(val/(max||100));t+=(i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1)}return t}
@@ -242,6 +242,29 @@ function loadShop(){fetch('/api/shop').then(function(r){return r.json()}).then(f
 })}
 function shopInstall(id){if(!confirm('将下载并安装 '+id+' ，确定？'))return;var b=document.activeElement;b.disabled=true;b.textContent='安装中…';post('/api/shop/install',{id:id},function(res){
   b.disabled=false;b.textContent='一键安装';toast(res.msg||('安装请求已发出 '+id));
+})}
+
+function loadPlug(){
+  var h='<div class="card" style="padding:6px 18px 18px"><div class="l" style="padding-top:14px">插件（极简 DSL + 微脚本语言）</div>'
+    +'<div class="muted" style="line-height:1.8">在配置的插件目录（默认 <code>plugins/</code>）放 <code>*.yml</code>；每个插件可声明工具、周期任务与事件钩子。脚本内置 <code>cmd()</code> / <code>fetch()</code> / <code>ret()</code> / <code>log()</code>，工具可被前端与 MCP 调用。</div></div>'
+    +'<div class="card" style="margin-top:14px"><div class="l">已加载插件</div><div id="plglist" style="padding-top:6px">加载中…</div></div>'
+    +'<div class="card" style="margin-top:14px"><div class="l">最近日志</div><div id="plglogs" style="padding-top:6px">—</div></div>';
+  $('view').innerHTML=h;
+  fetch('/api/plugins').then(function(r){return r.json()}).then(function(d){
+    var el=$('plglist');
+    if(!d.ok){el.innerHTML='<span class="hot">获取插件失败</span>';return}
+    if(!(d.plugins||[]).length){el.innerHTML='<span class="muted">尚未加载任何插件</span>';}
+    else{el.innerHTML='<table><tr><th>插件</th><th>版本</th><th>工具</th><th>定时</th><th></th></tr>'+(d.plugins||[]).map(function(p){
+      return '<tr><td><b>'+esc(p.name)+'</b><div class="muted">'+esc(p.desc)+'</div></td><td class="muted">'+esc(p.version)+'</td>'
+       +'<td>'+(p.tools||[]).map(function(t){return '<code>'+esc(t.id)+'</code>'}).join(' ')+'</td>'
+       +'<td class="muted">'+(p.tasks||[]).map(function(t){return t.id+' /'+t.every+'s'}).join(' ')+'</td>'
+       +'<td style="text-align:right">'+(p.tools||[]).map(function(t){return '<button class="mini pri" onclick="plugRun(\''+esc(p.name)+'\',\''+esc(t.id)+'\')">运行 '+esc(t.id)+'</button>'}).join(' ')+'</td></tr>'}).join('')+'</table>'+muted('钩子事件表：'+['on_init','on_shutdown','on_tick','on_http_request','on_snapshot','on_process_list','on_service_start','on_service_stop','on_service_restart','on_firewall_allow','on_firewall_del','on_task_add','on_task_del','on_login','on_logout','on_shop_install','on_disk_low','on_cpu_high','on_mem_high','on_cron'].join(' · '));}
+    var lg=$('plglogs');
+    lg.innerHTML=(d.logs||[]).length?'<pre style="white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;font-size:12px">'+(d.logs||[]).map(function(x){return esc(x)}).join('\n')+'</pre>':'<span class="muted">暂无日志</span>';
+  }).catch(function(){var el=$('plglist');el.innerHTML='<span class="hot">无法连接 /api/plugins</span>'});
+}
+function plugRun(plugin,tool){var b=document.activeElement;b.disabled=true;b.textContent='运行中…';post('/api/plugin/'+encodeURIComponent(plugin)+'/'+encodeURIComponent(tool),{},function(res){
+  b.disabled=false;b.textContent='运行 '+tool;toast(res.msg||('请求已发出 '+plugin+'/'+tool));
 })}
 
 function loadMCP(){

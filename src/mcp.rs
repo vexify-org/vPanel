@@ -17,7 +17,7 @@ pub fn handle(body: &[u8], state: &State) -> Vec<u8> {
 
     let resp = match method.as_str() {
         "initialize" => init_resp(id_num),
-        "tools/list" => tools_list(id_num),
+        "tools/list" => tools_list(id_num, state),
         "tools/call" => tools_call(&text, state, id_num),
         "ping" => fmt_jsonrpc(id_num, "{\"result\":{}}".into(), false),
         _ => fmt_jsonrpc(
@@ -39,9 +39,9 @@ fn fmt_jsonrpc(id: Option<i64>, payload: String, is_error: bool) -> String {
         None => "null".to_string(),
     };
     let field = if is_error {
-        format!("error:{{\"code\":-32601,\"message\":\"{}\"}}", payload)
+        format!("\"error\":{{\"code\":-32601,\"message\":\"{}\"}}", payload)
     } else {
-        format!("result:{}", payload)
+        format!("\"result\":{}", payload)
     };
     format!("{{\"jsonrpc\":\"2.0\",\"id\":{},{}}}", id, field)
 }
@@ -56,7 +56,8 @@ fn init_resp(id: Option<i64>) -> String {
 }
 
 /// 工具清单。schema 用 r## 保留以便直接拼 JSON。
-fn tools_list(id: Option<i64>) -> String {
+/// 集成插件工具：每个插件工具暴露为 `p_<plugin>.tool` 形式的 MCP 工具。
+fn tools_list(id: Option<i64>, state: &State) -> String {
     let tools = [
         ("system_overview","查看系统状态：CPU、内存、磁盘、网络、负载","{}"),
         ("list_processes","列出进程（按内存前 80）","{}"),
@@ -77,6 +78,21 @@ fn tools_list(id: Option<i64>) -> String {
             json::jesc(desc),
             schema
         ));
+    }
+    // 追加插件工具。
+    for p in plugins_snapshot(state) {
+        for t in &p.tools {
+            let mut s = String::new();
+            s.push_str("{\"name\":\"");
+            s.push_str(&plugin_tool_name(&p, &t.id));
+            s.push_str("\",\"description\":\"[插件 ");
+            s.push_str(&p.name);
+            s.push_str("] ");
+            s.push_str(&json::jesc(&t.desc));
+            s.push_str("\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}}");
+            // 说明：上面 `{}}}` 前部的 `{}` 是 properties 空对象，`}` 关 inputSchema，最后一个 `}` 关工具对象。
+            item.push(s);
+        }
     }
     let result = format!(
         "{{\"tools\":[{}]}}",
@@ -122,7 +138,7 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
             Ok(p) => (crate::system::kill_pid(p), format!("请求结束进程 {}", p)),
             Err(_) => (false, "pid 需为数字".into()),
         },
-        _ => (false, format!("未知工具: {}", name)),
+        _ => plugin_or_unknown(state, name.as_str()),
     };
     let result = format!(
         "{{\"content\":[{{\"type\":\"text\",\"text\":\"{}\"}}],\"isError\":{}}}",
@@ -207,4 +223,33 @@ fn arg_str(args: &str, key: &str) -> String {
             .unwrap_or(rest.len());
         rest[..e].trim().to_string()
     }
+}
+
+/// 插件工具对应的 MCP 工具名：`p_<插件名>_<工具id>`（不做特殊字符）。
+fn plugin_tool_name(p: &crate::plugins::Plugin, tool: &str) -> String {
+    format!("p_{}_{}", skill(&p.name), skill(tool))
+}
+
+/// 只保留 [A-Za-z0-9_]，其余转成 `_`。
+fn skill(s: &str) -> String {
+    s.chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .collect()
+}
+
+/// 插件快照（避免持有锁过久）。
+fn plugins_snapshot(state: &State) -> Vec<crate::plugins::Plugin> {
+    state.plugins.snapshot()
+}
+
+/// 若非内置工具，尝试按插件工具派发；找不到则返回“未知工具”。
+fn plugin_or_unknown(state: &State, name: &str) -> (bool, String) {
+    for p in plugins_snapshot(state) {
+        for t in &p.tools {
+            if plugin_tool_name(&p, &t.id) == name {
+                return state.plugins.call_tool(&p.name, &t.id);
+            }
+        }
+    }
+    (false, format!("未知工具: {}", name))
 }
