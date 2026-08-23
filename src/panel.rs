@@ -128,8 +128,8 @@ form.rowform{display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wr
 <div class="toast" id="toast"></div>
 <script>
 var ACCENT='__ACCENT__', SHELL_ON=__SHELL_ON__;
-var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务"};
-var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["fw","安全"],["tk","定时"]];
+var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务",shop:"软件商店",mcp:"AI 工具"};
+var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["fw","安全"],["tk","定时"],["shop","商店"],["mcp","AI"]];
 if(SHELL_ON)TABS.push(["term","终端"]);
 var cur="ov";
 
@@ -145,6 +145,7 @@ function choose(){window.clearInterval(window._iv);$('ttl').textContent=TITLES[c
   if(cur==='term'){$('view').innerHTML='<div class="card" style="text-align:center;padding:40px"><a class="pri" style="text-decoration:none;display:inline-block" href="/term">&#9654; 打开 Web 终端</a></div>';return}
   if(cur==='ov'){loadOv();window._iv=setInterval(loadOv,2000)}
   if(cur==='ps')loadPs(); if(cur==='sv')loadSv(); if(cur==='fw')loadFw(); if(cur==='tk')loadTk();
+  if(cur==='shop')loadShop(); if(cur==='mcp')loadMCP();
 }
 
 function chart(cid){return {id:cid,path:"",draw:function(arr,color,max){var v=$('svg#c'+cid);if(!v)return;var w=v.clientWidth||300,h=v.clientHeight||120,n=arr.length;if(!n)return;var pad=2;function px(arr){var t="";for(var i=0;i<n;i++){var x=pad+(i/(n-1))*(w-2*pad);var val=Math.min(arr[i]||0,max||100);var y=h-pad-(h-2*pad)*(val/(max||100));t+=(i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1)}return t}
@@ -230,6 +231,41 @@ function loadTk(){fetch('/api/tasks').then(function(r){return r.json()}).then(fu
 function tkAdd(e){e.preventDefault();var sch=e.target.schedule.value.trim(),cmd=e.target.command.value.trim();if(!sch||!cmd)return;post('/api/tasks/add',{schedule:sch,command:cmd},function(res){toast(res.msg||'已添加');loadTk()})}
 
 function post(path,fields,cb){var fd=new FormData();for(var k in fields)fd.append(k,fields[k]);fetch(path,{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(res){if(cb)cb(res);if(res&&res.ok===false&&!cb)toast(res.msg||'操作失败')})}
+
+function loadShop(){fetch('/api/shop').then(function(r){return r.json()}).then(function(d){
+  if(!d.ok){$('view').innerHTML='<div class="card" style="padding:30px;text-align:center"><div style="font-weight:700;margin-bottom:8px">软件商店 · 清单拉取失败</div><div class="muted">'+esc(d.msg||'未知错误')+'</div><div style="margin-top:16px"><button class="pri" onclick="loadShop()">重试</button></div></div>';return}
+  var h='<div class="toolbar"><span class="muted" style="align-self:center">加速源: <code>'+esc(d.accel)+'</code></span><button class="pri" onclick="loadShop()">刷新清单</button></div>';
+  h+='<div class="card"><table><tr><th>软件</th><th>说明</th><th></th></tr>';
+  (d.list||[]).forEach(function(a){h+='<tr><td><b>'+esc(a.name)+'</b> <span class="muted">'+esc(a.id)+'</span></td><td>'+esc(a.desc)+'</td><td style="text-align:right"><button class="mini ok" onclick="shopInstall(\''+esc(a.id)+'\')">一键安装</button></td></tr>'});
+  h+='</table>'+muted((d.list||[]).length+' 个软件 · 清单来自远程仓库，下载走加速')+'</div>';
+  $('view').innerHTML=h;
+})}
+function shopInstall(id){if(!confirm('将下载并安装 '+id+' ，确定？'))return;var b=document.activeElement;b.disabled=true;b.textContent='安装中…';post('/api/shop/install',{id:id},function(res){
+  b.disabled=false;b.textContent='一键安装';toast(res.msg||('安装请求已发出 '+id));
+})}
+
+function loadMCP(){
+  var h='<div class="card" style="padding:6px 18px 18px"><div class="l" style="padding-top:14px">连接地址（MCP Streamable HTTP）</div>'
+    +'<code style="display:block;background:var(--line);padding:12px;border-radius:10px;margin:8px 0 14px">'+(location.protocol==='https:'?'https://':'http://')+location.host+'/mcp</code>'
+    +'<div class="muted" style="line-height:1.8">在 Claude / Cursor 等 AI 客户端里添加 MCP 服务器并指向上述地址，即可让 AI 调用面板能力：系统监控、进程、服务、防火墙、定时任务。</div></div>'
+    +'<div class="card" style="margin-top:14px"><div class="l">工具自检</div><div id="mcplist" style="padding-top:6px">正在测试…</div></div>'
+    +'<div class="card" style="margin-top:14px"><form class="rowform" onsubmit="mcpTest(event)"><input name="tool" placeholder="工具名，如 system_overview / service_action" required style="flex:1;min-width:200px"><button class="pri" type="submit">测试调用</button></form></div>'
+    +'<div class="card" style="margin-top:14px"><div class="l">返回结果</div><pre id="mcpout" style="white-space:pre-wrap;word-break:break-all;max-height:260px;overflow:auto;font-size:12px">—</pre></div>';
+  $('view').innerHTML=h;
+  fetch('/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'})
+    .then(function(r){return r.json()}).then(function(d){
+      var tools=(d.result&&d.result.tools)||[];var el=$('mcplist');
+      el.innerHTML='<table><tr><th>工具</th><th>说明</th></tr>'+tools.map(function(t){return '<tr><td><code>'+esc(t.name)+'</code></td><td>'+esc(t.description)+'</td></tr>'}).join('')+'</table>'+muted('共 '+tools.length+' 个工具');
+    }).catch(function(){var el=$('mcplist');el.innerHTML='<span class="hot">无法连接 /mcp 端点</span>'});
+}
+function mcpTest(e){e.preventDefault();var t=e.target.tool.value.trim();if(!t)return;
+  var out=$('mcpout');out.textContent='调用 '+t+' …';
+  var payload={jsonrpc:"2.0",id:2,method:"tools/call",params:{name:t,arguments:{}}};
+  fetch('/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(function(r){return r.json()}).then(function(d){
+      var c=(d.result&&d.result.content||[]);out.textContent=c.map(function(x){return x.text}).join('\n')||JSON.stringify(d);
+    }).catch(function(e2){out.textContent='调用失败: '+e2});
+}
 function muted(s){return '<div class="muted" style="padding:8px 2px 0">'+s+'</div>'}
 
 renderTabs();choose();

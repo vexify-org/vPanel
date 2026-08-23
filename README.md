@@ -1,9 +1,10 @@
 # vPanel · 清亮低内存 HTTP 面板
 
-一个用 Rust 手写、**常驻内存约 1.5MB、高并发峰值 < 2MB、预算上限 10MB** 的极简服务器管理面板。不依赖 tokio/hyper，使用标准库 + 固定线程池 + 有界队列，仅在内核背压下丢弃连接，内存恒定有界。
+一个用 Rust 手写、**常驻内存约 1MB、高并发峰值 < 2MB、预算上限 10MB** 的极简服务器管理面板。不依赖 tokio/hyper，使用标准库 + 固定线程池 + 有界队列，仅在内核背压下丢弃连接，内存恒定有界。
 
 - 单二进制，YAML 配置，零外部资源依赖。
-- 浏览器内多标签管理控制台：概览 / 进程 / 服务 / 安全 / 定时任务 + Web 终端。
+- 浏览器内多标签管理控制台：概览 / 进程 / 服务 / 安全 / 定时任务 / 软件商店 / AI 工具 + Web 终端。
+- 内置 **MCP 端点**（`/mcp`），AI 客户端可直接接线调用面板能力。
 - 代码量小、可读性强，适合在低配 VPS 上常驻。
 
 ## 快速开始
@@ -13,10 +14,10 @@
 cargo build --release
 
 # 运行（自动在当前目录查找 panel.yml / panel.yaml / config.yml / config.yaml）
-./target/release/panel
+./target/release/vpanel
 
 # 或显式指定配置
-./target/release/panel /path/to/panel.yml
+./target/release/vpanel /path/to/panel.yml
 ```
 
 启动后访问 `http://<host>:8080/`。
@@ -30,10 +31,20 @@ cargo build --release
 | 服务管理 | 基于 `systemctl` 的服务的 start / stop / restart |
 | 防火墙 | 基于 `ufw` 的端口放行 / 删除 |
 | 定时任务 | 基于 `crontab` 的增删查 |
+| 软件商店 | 一键装常用软件，下载统一走加速前缀；清单可从远程仓库（`vp-store`）实时拉取，失败回退内置清单 |
+| AI 工具 | 内置 `/mcp` 端点（MCP Streamable HTTP），AI 客户端可接线调用上述能力 |
 | Web 终端 | WebSocket + PTY，浏览器内本地 Shell 控制（按需连接） |
 | 心跳 | `/health` 返回 `ok`，`/metrics` 返回请求/并发/内存统计 |
 
 > 注意：进程 / 服务 / 防火墙 / 定时任务等操作需要相应的 `root` 权限及 `systemd` / `ufw` 环境。
+
+### AI 工具（MCP）
+
+面板内置一个基于 MCP（Model Context Protocol）Streamable HTTP 的端点：`POST /mcp`。
+
+- 支持 `initialize`、`tools/list`、`tools/call`。
+- 在 Claude / Cursor 等客户端添加 MCP 服务器并指向 `http://<host>:8080/mcp`，AI 即可调用：系统监控、进程（含结束）、服务（启停重启）、防火墙端口、定时任务。
+- 前端「AI 工具」页提供连接地址、工具自检与工具调用测试。
 
 ## 配置
 
@@ -58,6 +69,10 @@ shell:               # Web 终端
   args: []
   columns: 100
   rows: 30
+
+download:              # 软件商店
+  accel: "https://g.z321.cc.cd/"     # 全局下载加速前缀
+  store: "vexify-org/vp-store@main"  # 清单仓库（owner/repo@branch）
 ```
 
 ## 内存设计
@@ -67,7 +82,7 @@ shell:               # Web 终端
 - 系统命令（systemctl / ufw / crontab / df）按需执行一次性子进程，随请求结束即释放。
 - 监控曲线用定长环形缓冲；系统快照与进程列表按请求现场读取后立即释放。
 
-实测：常驻约 1.5MB；200 并发请求后约 1.6MB。
+实测：常驻约 0.8MB；300 并发请求后约 0.9MB（含软件商店 / MCP 后仍远低于 10MB 预算）。
 
 ## 接口（/api/*）
 
@@ -76,10 +91,14 @@ shell:               # Web 终端
 - GET `/api/services` — 服务列表
 - GET `/api/firewall` — 防火墙规则
 - GET `/api/tasks` — 定时任务
+- GET `/api/shop` — 软件商店清单（含来源模式、加速前缀）
 - POST `/api/process/kill` — `pid`
 - POST `/api/service/action` — `name`, `action=start|stop|restart`
 - POST `/api/firewall/add` / `/api/firewall/del` — `port`
 - POST `/api/tasks/add` — `schedule`(5 段 cron), `command`
+- POST `/api/shop/install` — `id`（软件 ID）
+
+另：`POST /mcp` — MCP 端点（`initialize` / `tools/list` / `tools/call`）。
 
 ## License
 

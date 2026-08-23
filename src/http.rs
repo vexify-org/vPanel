@@ -27,11 +27,13 @@ pub struct State {
     pub conns: AtomicU64,
     pub cfg: Config,
     pub monitor: Arc<crate::system::Monitor>,
+    pub shop: Arc<crate::shop::Shop>,
 }
 
 /// 启动监听并派发工作线程。阻塞运行，直到进程退出。
 pub fn serve(cfg: Config) -> std::io::Result<()> {
     let monitor = crate::system::Monitor::start();
+    let shop = crate::shop::Shop::new();
     let addr = format!("{}:{}", cfg.server.bind, cfg.server.port);
     let listener = TcpListener::bind(&addr)?;
     listener.set_nonblocking(true)?;
@@ -43,6 +45,7 @@ pub fn serve(cfg: Config) -> std::io::Result<()> {
         conns: AtomicU64::new(0),
         cfg,
         monitor,
+        shop,
     });
 
     // 有界队列：高并发时连接在此排队或直接拒绝，内存不随之膨胀。
@@ -138,6 +141,15 @@ fn handle(stream: &mut TcpStream, state: &State) {
 
     // POST 请求体（按 Content-Length 读取）。
     let body = read_body(stream, &head, &buf[..n]);
+
+    // MCP 端点：供 AI 客户端调用面板能力（JSON-RPC over HTTP）。
+    if target == "/mcp" && method == "POST" {
+        if let Ok(mut clone) = stream.try_clone() {
+            let resp = crate::mcp::handle(&body, state);
+            let _ = respond(&mut clone, "200 OK", "application/json; charset=utf-8", &resp);
+        }
+        return;
+    }
 
     // /api/* 端点：JSON 数据或操作。
     if target.starts_with("/api/") {

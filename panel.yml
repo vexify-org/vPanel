@@ -20,3 +20,7 @@ shell:                     # Web 终端（浏览器内本地 Shell 控制）
   args: []                 # 附加参数，如 ["-l"]
   columns: 100
   rows: 30
+
+download:                  # 软件商店：加速前缀 + 清单仓库
+  accel: "https://g.z321.cc.cd/"          # 全局下载加速前缀
+  store: "vexify-org/vp-store@main"        # 清单仓库（owner/repo@branch）

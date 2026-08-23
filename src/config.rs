@@ -20,6 +20,9 @@ pub struct Download {
     /// 全局下载加速前缀，用于软件商店下载。空则用默认代理。
     #[serde(default = "d_accel")]
     pub accel: String,
+    /// 软件商店清单仓库，形如 "owner/repo@branch"。空则用默认。
+    #[serde(default = "d_store")]
+    pub store: String,
 }
 
 /// Web 终端（本地 Shell 控制）。
@@ -99,6 +102,7 @@ impl Default for Download {
     fn default() -> Self {
         Download {
             accel: d_accel(),
+            store: d_store(),
         }
     }
 }
@@ -126,6 +130,10 @@ impl Default for Config {
 
 fn d_accel() -> String {
     crate::shop::DEFAULT_ACCEL.to_string()
+}
+
+fn d_store() -> String {
+    crate::shop::DEFAULT_STORE.to_string()
 }
 
 fn d_bind() -> String {

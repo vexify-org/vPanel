@@ -12,6 +12,21 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
         "/api/services" => crate::ctl::services_json(),
         "/api/firewall" => crate::ctl::firewall_json(),
         "/api/tasks" => crate::ctl::tasks_json(),
+        "/api/shop" => state.shop.list_json(&state.cfg),
+        "/api/shop/install" => {
+            if method != "POST" {
+                err("需要 POST")
+            } else {
+                let fields = json::parse_form(body);
+                let id = json::form_get(&fields, "id").unwrap_or("").trim().to_string();
+                if id.is_empty() {
+                    err("缺少 id")
+                } else {
+                    let (ok, msg, _exists) = state.shop.install(&id, &state.cfg);
+                    ok_bool(ok, msg)
+                }
+            }
+        }
         _ => {
             if method == "POST" {
                 action_route(target, body)
