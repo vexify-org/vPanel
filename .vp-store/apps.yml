@@ -1,7 +1,33 @@
-# vPanel 软件商店 · 应用清单（apt 真实可用包，约 1MB）
-# 面板从该仓库实时拉取本文件（下载默认走加速前缀 g.z321.cc.cd）。
-# 每条用 {accel} 表示加速前缀，安装时自动替换。
+# vPanel 软件商店 · 应用清单（约 1MB）
+# 面板从此仓库实时拉取本文件（下载默认走加速前缀 g.z321.cc.cd）。
+# {accel} 会在安装时被替换为实际加速前缀。
 apps:
+  - id: docker
+    name: Docker Engine
+    desc: Docker 容器运行时（get.docker.com 官方脚本，下载走加速）
+    script: |
+      curl -fsSL {accel}https://get.docker.com | sh
+      systemctl enable --now docker
+  - id: docker-compose
+    name: Docker Compose
+    desc: 多容器编排（官方二进制，arm64/x86_64 自动识别，走加速）
+    script: |
+      arch=$(uname -m)
+      if [ "$arch" = aarch64 ]; then arch=aarch64; else arch=x86_64; fi
+      curl -fsSL {accel}https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${arch} -o /usr/local/bin/docker-compose
+      chmod +x /usr/local/bin/docker-compose
+  - id: nginx
+    name: Nginx
+    desc: 高性能 Web / 反向代理服务器（apt 源）
+    script: |
+      apt-get update -qq && apt-get install -y -qq nginx
+      systemctl enable --now nginx
+  - id: caddy
+    name: Caddy
+    desc: 自动 HTTPS 的 Web 服务器（官方二进制，走加速）
+    script: |
+      curl -fsSL {accel}https://caddyserver.com/api/download -o /usr/bin/caddy
+      chmod +x /usr/bin/caddy
   - id: 0ad
     name: 0ad
     desc: 0ad
@@ -40362,43 +40388,3 @@ apps:
       apt-get update -qq
       apt-get install -y -qq elpa-yasnippet
       # vPanel 商店包：elpa-yasnippet
-  - id: elpa-yasnippet-snippets
-    name: elpa-yasnippet-snippets
-    desc: elpa-yasnippet-snippets
-    script: |
-      set -e
-      apt-get update -qq
-      apt-get install -y -qq elpa-yasnippet-snippets
-      # vPanel 商店包：elpa-yasnippet-snippets
-  - id: elpa-zenburn-theme
-    name: elpa-zenburn-theme
-    desc: elpa-zenburn-theme
-    script: |
-      set -e
-      apt-get update -qq
-      apt-get install -y -qq elpa-zenburn-theme
-      # vPanel 商店包：elpa-zenburn-theme
-  - id: elpa-ztree
-    name: elpa-ztree
-    desc: elpa-ztree
-    script: |
-      set -e
-      apt-get update -qq
-      apt-get install -y -qq elpa-ztree
-      # vPanel 商店包：elpa-ztree
-  - id: elpa-zzz-to-char
-    name: elpa-zzz-to-char
-    desc: elpa-zzz-to-char
-    script: |
-      set -e
-      apt-get update -qq
-      apt-get install -y -qq elpa-zzz-to-char
-      # vPanel 商店包：elpa-zzz-to-char
-  - id: elph
-    name: elph
-    desc: elph
-    script: |
-      set -e
-      apt-get update -qq
-      apt-get install -y -qq elph
-      # vPanel 商店包：elph
