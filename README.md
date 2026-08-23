@@ -102,4 +102,4 @@ download:              # 软件商店
 
 ## License
 
-[MIT](./LICENSE)
+[Apache-2.0](./LICENSE)
