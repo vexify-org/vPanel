@@ -13,8 +13,21 @@ mod ws;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    let path = std::env::args().nth(1).unwrap_or_else(|| "panel.yml".to_string());
-    let cfg = config::Config::load(&path);
+    // 用法:
+    //   panel              # 自动在当前目录查找配置文件（panel.yml / panel.yaml / config.yml / config.yaml）
+    //   panel /path/a.yml  # 或显式指定配置路径
+    let (cfg, path) = match std::env::args().nth(1) {
+        Some(p) => (config::Config::load(&p), Some(p)),
+        None => config::Config::auto_find(),
+    };
+
+    if let Some(p) = path {
+        eprintln!("panel: 已加载配置 {}", p);
+    } else {
+        eprintln!(
+            "panel: 当前目录未找到配置文件，使用默认配置（可创建 panel.yml 覆盖）"
+        );
+    }
 
     match http::serve(cfg) {
         Ok(()) => ExitCode::SUCCESS,

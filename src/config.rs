@@ -142,6 +142,9 @@ fn d_theme() -> String {
     "light".to_string()
 }
 
+/// 当前工作目录下会自动尝试的配置文件名（按优先级）。
+const CANDIDATES: &[&str] = &["panel.yml", "panel.yaml", "config.yml", "config.yaml"];
+
 /// 从路径加载 YAML；文件缺失或解析失败时回退到默认配置，
 /// 保证进程始终能启动（常驻可用性的第一原则）。
 impl Config {
@@ -150,5 +153,20 @@ impl Config {
             Ok(s) => serde_yaml::from_str(&s).unwrap_or_else(|_| Config::default()),
             Err(_) => Config::default(),
         }
+    }
+
+    /// 自动在「当前工作目录」查找配置文件，返回 (配置, 实际命中的文件名)。
+    /// 找不到任何候选时返回默认配置与 None，进程仍能正常启动。
+    pub fn auto_find() -> (Config, Option<String>) {
+        for name in CANDIDATES {
+            if std::path::Path::new(name).is_file() {
+                if let Ok(s) = std::fs::read_to_string(name) {
+                    if let Ok(cfg) = serde_yaml::from_str(&s) {
+                        return (cfg, Some((*name).to_string()));
+                    }
+                }
+            }
+        }
+        (Config::default(), None)
     }
 }
