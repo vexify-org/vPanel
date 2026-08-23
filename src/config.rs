@@ -8,6 +8,23 @@ pub struct Config {
     pub server: Server,
     #[serde(default)]
     pub panel: Panel,
+    #[serde(default)]
+    pub shell: Shell,
+}
+
+/// Web 终端（本地 Shell 控制）。
+#[derive(Debug, Clone, Deserialize)]
+pub struct Shell {
+    #[serde(default = "d_enabled")]
+    pub enabled: bool,
+    #[serde(default = "d_cmd")]
+    pub cmd: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default = "d_columns")]
+    pub columns: u16,
+    #[serde(default = "d_rows")]
+    pub rows: u16,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -56,6 +73,18 @@ impl Default for Panel {
     }
 }
 
+impl Default for Shell {
+    fn default() -> Self {
+        Shell {
+            enabled: d_enabled(),
+            cmd: d_cmd(),
+            args: Vec::new(),
+            columns: d_columns(),
+            rows: d_rows(),
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
@@ -71,12 +100,25 @@ impl Default for Config {
                 accent: d_accent(),
                 theme: d_theme(),
             },
+            shell: Shell::default(),
         }
     }
 }
 
 fn d_bind() -> String {
     "0.0.0.0".to_string()
+}
+fn d_enabled() -> bool {
+    true
+}
+fn d_cmd() -> String {
+    "/bin/sh".to_string()
+}
+fn d_columns() -> u16 {
+    100
+}
+fn d_rows() -> u16 {
+    30
 }
 fn d_port() -> u16 {
     8080

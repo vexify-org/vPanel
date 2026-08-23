@@ -13,3 +13,10 @@ panel:
   subtitle: "极简 · 低内存 HTTP 面板"
   accent: "#2563eb"       # 主题强调色
   theme: "light"          # light | dark
+
+shell:                     # Web 终端（浏览器内本地 Shell 控制）
+  enabled: true
+  cmd: "/bin/sh"           # 可改为 /bin/bash
+  args: []                 # 附加参数，如 ["-l"]
+  columns: 100
+  rows: 30

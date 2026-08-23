@@ -7,6 +7,8 @@
 mod config;
 mod http;
 mod panel;
+mod term;
+mod ws;
 
 use std::process::ExitCode;
 

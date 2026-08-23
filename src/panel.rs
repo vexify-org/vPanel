@@ -62,6 +62,8 @@ h1{{font-size:30px;letter-spacing:.5px;font-weight:800}} h1 span{{color:var(--ac
 .row{{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}}
 .row:last-child{{border-bottom:none}} .row b{{font-weight:600}}
 .k{{color:var(--muted)}}
+.btn{{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:12px;font-size:14px;box-shadow:0 6px 16px rgba(37,99,235,.25);transition:transform .1s}}
+.btn:hover{{transform:translateY(-1px)}}
 .mem{{display:flex;align-items:center;gap:14px}}
 .bar{{flex:1;height:8px;background:#eef2f7;border-radius:999px;overflow:hidden}}
 .bar i{{display:block;height:100%;background:var(--accent);border-radius:999px;transition:width .4s}}
@@ -98,8 +100,10 @@ footer{{text-align:center;color:var(--muted);font-size:12px;margin-top:40px}}
   <div class="row"><span class="k">队列上限</span><b>{backlog}</b></div>
   <div class="row"><span class="k">主题</span><b>{theme}</b></div>
   <div class="row"><span class="k">运行环境</span><b>{arch}/{os}</b></div>
+  <div class="row"><span class="k">Web 终端</span><b>{shell_state}</b></div>
 </div>
 
+{shell_card}
 <footer>Lumen Panel · zero-runtime HTTP dashboard · 内存恒定</footer>
 </div>
 </body>
@@ -121,6 +125,8 @@ footer{{text-align:center;color:var(--muted);font-size:12px;margin-top:40px}}
         theme = esc(&cfg.panel.theme),
         arch = std::env::consts::ARCH,
         os = std::env::consts::OS,
+        shell_state = if cfg.shell.enabled { "已启用" } else { "已禁用" },
+        shell_card = shell_card(cfg),
         dark_mode = if dark {
             ":root{--bg:#0f172a;--card:#1e293b;--ink:#e2e8f0;--muted:#94a3b8;--line:#334155;--shadow:0 10px 30px rgba(0,0,0,.4)}"
         } else { "" },
@@ -140,6 +146,92 @@ fn esc(s: &str) -> String {
         }
     }
     out
+}
+
+/// 终端入口卡片（在终端启用时显示通往 /term 的按钮）。
+fn shell_card(cfg: &crate::config::Config) -> String {
+    if !cfg.shell.enabled {
+        return String::new();
+    }
+    format!(
+        "<div class=\"card\" style=\"margin-bottom:28px\"><div class=\"l\" style=\"margin-bottom:14px\">Web 终端</div><div style=\"display:flex;align-items:center;justify-content:space-between\"><div style=\"font-size:14px\">在浏览器里直接操控本机 Shell（{cmd}），无需 SSH 公钥。\n</div><a class=\"btn loadterm\" href=\"/term\" style=\"flex:none\">&#9654; 打开终端</a></div></div>",
+        cmd = cfg.shell.cmd
+    )
+}
+
+/// Web 终端页面（基于 xterm.js + WebSocket）。
+pub fn render_term(cfg: &crate::config::Config) -> String {
+    let accent = esc(&cfg.panel.accent);
+    let dark = cfg.panel.theme.eq_ignore_ascii_case("dark");
+    let theme_css = if dark {
+        "--bg:#0b1220;--line:#1e293b;"
+    } else {
+        "--bg:#ffffff;--line:#e5e7eb;"
+    };
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>终端 · {title}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+<style>
+*{{box-sizing:border-box}}
+body{{margin:0;padding:0;background:{bg};font-family:system-ui,sans-serif;height:100vh;display:flex;flex-direction:column}}
+.top{{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid {line};background:{bg};color:#1f2937}}
+.top .mk{{width:46px;height:46px;border-radius:12px;background:{accent};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px}}
+.top h1{{font-size:16px;margin:0;font-weight:800}}
+.top .hint{{font-size:12px;color:#6b7280}}
+.back{{margin-left:auto;color:{accent};text-decoration:none;font-size:13px;font-weight:700}}
+#term{{flex:1;padding:6px 0}}
+.status{{height:28px;font-size:11px;color:#6b7280;display:flex;align-items:center;padding:0 18px;border-top:1px solid {line}}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="mk">&#9654;</div>
+  <div><h1>{title} · Web 终端</h1><div class="hint">{cmd}</div></div>
+  <a class="back" href="/">&#8592; 返回面板</a>
+</div>
+<div id="term"></div>
+<div class="status"><span id="st">连接中…</span></div>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+<script>
+(function(){{
+  const term = new Terminal({{cursorBlink:true, fontSize:14, fontFamily:'Menlo,Consolas,"Courier New",monospace'}});
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(document.getElementById('term'));
+  fit.fit();
+
+  const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+  const ws = new WebSocket(proto + location.host + '/ws');
+  const st = document.getElementById('st');
+
+  ws.onopen = function(){{ st.textContent = '已连接 · ' + term.cols + 'x' + term.rows; term.focus(); }};
+  ws.onclose = function(){{ st.textContent = '已断开'; term.dispose(); }};
+  ws.onmessage = function(ev){{ term.write(ev.data); }};
+
+  const enc = new TextEncoder();
+  term.onData(function(d){{ ws.send(enc.encode(d)); }});
+
+  const sendSize = function(){{ ws.send('st'+String.fromCharCode(9)+term.cols+String.fromCharCode(9)+term.rows); }};
+  term.onResize(function(){{ sendSize(); }});
+  sendSize();
+
+  window.addEventListener('resize', function(){{ fit.fit(); sendSize(); }});
+}})();
+</script>
+</body>
+</html>"#,
+        title = esc(&cfg.panel.title),
+        cmd = esc(&cfg.shell.cmd),
+        accent = accent,
+        bg = theme_css,
+        line = if dark { "#1e293b" } else { "#e5e7eb" },
+    )
 }
 
 /// 秒数 -> 人类可读时长。

@@ -119,9 +119,25 @@ fn handle(stream: &mut TcpStream, state: &State) {
     let line = head.lines().next().unwrap_or("");
     let target = line.split_whitespace().nth(1).unwrap_or("/");
 
+    // Web Socket 与会话式终端：升级为长连接并驱动 PTY。
+    if target == "/ws" {
+        if let Ok(clone) = stream.try_clone() {
+            state.active.fetch_add(1, Ordering::Relaxed);
+            if let Some(ws) = crate::ws::Ws::accept(clone, &head) {
+                crate::term::run(ws, &state.cfg.shell);
+            }
+            state.active.fetch_sub(1, Ordering::Relaxed);
+        }
+        return;
+    }
+
     let (status, ctype, body): (&str, &str, Vec<u8>) = match target {
         "/" | "/index.html" => {
             let html = crate::panel::render(state);
+            ("200 OK", "text/html; charset=utf-8", html.into_bytes())
+        }
+        "/term" | "/term.html" => {
+            let html = crate::panel::render_term(&state.cfg);
             ("200 OK", "text/html; charset=utf-8", html.into_bytes())
         }
         "/health" => ("200 OK", "text/plain; charset=utf-8", b"ok\n".to_vec()),
