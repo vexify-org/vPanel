@@ -158,6 +158,36 @@ fn handle(stream: &mut TcpStream, state: &State) {
         return;
     }
 
+    // 文件下载：原始字节流 + attachment（区别于 JSON API）。
+    if target.starts_with("/api/file/download") {
+        let path = query_val(target, "path");
+        if let Some(p) = path {
+            if let Some(bytes) = crate::extra::download(&p) {
+                let fname = std::path::Path::new(&p)
+                    .file_name()
+                    .map(|x| x.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "download".to_string());
+                let safe_fname: String = fname
+                    .chars()
+                    .map(|c| if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' { c } else { '_' })
+                    .collect();
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"{}\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    safe_fname,
+                    bytes.len()
+                );
+                let _ = stream.write_all(head.as_bytes());
+                let _ = stream.write_all(&bytes);
+                let _ = stream.flush();
+            } else {
+                let _ = respond(stream, "404 Not Found", "text/plain; charset=utf-8", b"file not found\n");
+            }
+        } else {
+            let _ = respond(stream, "400 Bad Request", "text/plain; charset=utf-8", b"missing path\n");
+        }
+        return;
+    }
+
     // /api/* 端点：JSON 数据或操作。
     if target.starts_with("/api/") {
         let resp = crate::api::route(&method, target, &body, state);
@@ -245,6 +275,49 @@ fn read_head(stream: &mut TcpStream, buf: &mut [u8]) -> usize {
         }
     }
     total
+}
+
+/// 从 URI 的查询串中按键取值（极简 percent 解码）。
+fn query_val(target: &str, key: &str) -> Option<String> {
+    let qs = target.split_once('?').map(|(_, q)| q)?;
+    for pair in qs.split('&') {
+        if pair.is_empty() {
+            continue;
+        }
+        let (k, v) = match pair.split_once('=') {
+            Some((k, v)) => (k, v),
+            None => (pair, ""),
+        };
+        if percent_decode(k) == key {
+            return Some(percent_decode(v));
+        }
+    }
+    None
+}
+
+/// 极简 percent 解码（+ 视为空格）。
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'+' => out.push(b' '),
+            b'%' if i + 2 < b.len() => {
+                let h = (b[i + 1] as char).to_digit(16);
+                let l = (b[i + 2] as char).to_digit(16);
+                if let (Some(h), Some(l)) = (h, l) {
+                    out.push((h * 16 + l) as u8);
+                    i += 3;
+                    continue;
+                }
+                out.push(b[i]);
+            }
+            c => out.push(c),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -128,8 +128,8 @@ form.rowform{display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wr
 <div class="toast" id="toast"></div>
 <script>
 var ACCENT='__ACCENT__', SHELL_ON=__SHELL_ON__;
-var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务",shop:"软件商店",mcp:"AI 工具",plg:"插件"};
-var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["fw","安全"],["tk","定时"],["shop","商店"],["mcp","AI"],["plg","插件"]];
+var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务",shop:"软件商店",mcp:"AI 工具",plg:"插件",inf:"系统信息",net:"网络连接",log:"实时日志",fs:"文件管理"};
+var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["fw","安全"],["tk","定时"],["shop","商店"],["mcp","AI"],["plg","插件"],["inf","信息"],["net","连接"],["log","日志"],["fs","文件"]];
 if(SHELL_ON)TABS.push(["term","终端"]);
 var cur="ov";
 
@@ -146,6 +146,8 @@ function choose(){window.clearInterval(window._iv);$('ttl').textContent=TITLES[c
   if(cur==='ov'){loadOv();window._iv=setInterval(loadOv,2000)}
   if(cur==='ps')loadPs(); if(cur==='sv')loadSv(); if(cur==='fw')loadFw(); if(cur==='tk')loadTk();
   if(cur==='shop')loadShop(); if(cur==='mcp')loadMCP(); if(cur==='plg')loadPlug();
+  if(cur==='inf')loadInf(); if(cur==='net'){loadNet();window._iv=setInterval(loadNet,3000)}
+  if(cur==='log')loadLogCfg(); if(cur==='fs')loadFs('/');
 }
 
 function chart(cid){return {id:cid,path:"",draw:function(arr,color,max){var v=$('svg#c'+cid);if(!v)return;var w=v.clientWidth||300,h=v.clientHeight||120,n=arr.length;if(!n)return;var pad=2;function px(arr){var t="";for(var i=0;i<n;i++){var x=pad+(i/(n-1))*(w-2*pad);var val=Math.min(arr[i]||0,max||100);var y=h-pad-(h-2*pad)*(val/(max||100));t+=(i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1)}return t}
@@ -337,6 +339,124 @@ function mcpTest(e){e.preventDefault();var t=e.target.tool.value.trim();if(!t)re
     }).catch(function(e2){out.textContent='调用失败: '+e2});
 }
 function muted(s){return '<div class="muted" style="padding:8px 2px 0">'+s+'</div>'}
+function row(l,v,s){return '<tr><td class="muted" style="padding:9px 14px">'+l+'</td><td style="padding:9px 14px">'+v+'</td><td class="muted" style="padding:9px 14px">'+s+'</td></tr>'}
+function fmtDate(t){if(!t)return '—';var d=new Date(t*1000);return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)}
+
+/* ---- 系统信息 ---- */
+function loadInf(){
+  fetch('/api/info').then(function(r){return r.json()}).then(function(d){
+    var h='<div class="grid">'
+      +stat('操作系统',esc(d.os||'—'),esc(d.kernel||'')+' · '+esc(d.arch||''))
+      +stat('CPU',esc(d.cores)+' 核',esc(d.cpu_model||''))
+      +stat('内存',fmtB(d.mem_used)+' / '+fmtB(d.mem_total),'使用率 '+d.mem_pct+'%')
+      +stat('温度',esc(d.temp||'—'),'负载 '+esc(d.load||''))
+      +'</div>';
+    h+='<div class="card" style="margin-top:14px"><div class="l">详细</div><table>'
+      +row('主机名',esc(d.host),'—')
+      +row('运行时长',fmtUptime(d.uptime),'—')
+      +row('交换分区',fmtB(d.swap_used)+' / '+fmtB(d.swap_total),'—')
+      +'</table></div>';
+    h+='<div class="card" style="margin-top:14px"><div class="l">磁盘分区</div><table><tr><th>文件系统</th><th>挂载点</th><th class="num">容量</th><th class="num">已用</th><th class="num">使用</th></tr>';
+    (d.disks||[]).forEach(function(x){h+='<tr><td class="muted">'+esc(x.fs)+'</td><td>'+esc(x.mount)+'</td><td class="num">'+fmtB(x.total)+'</td><td class="num">'+fmtB(x.used)+'</td><td class="num">'+x.pct+'%</td></tr>'});
+    h+='</table></div>';
+    $('view').innerHTML=h;
+  }).catch(function(){$('view').innerHTML='<span class="hot">无法获取系统信息</span>'});
+}
+
+/* ---- 网络连接 ---- */
+function loadNet(){
+  fetch('/api/conns').then(function(r){return r.json()}).then(function(d){
+    var h='<div class="card"><div class="l">连接统计 <span class="muted">(ss/netstat)</span></div><table><tr><th>状态</th><th class="num">数量</th></tr>';
+    (d.states||[]).forEach(function(s){h+='<tr><td>'+esc(s.state)+'</td><td class="num">'+s.count+'</td></tr>'});
+    h+='</table>'+muted('合计 '+d.total+' 个连接')+'</div>';
+    h+='<div class="card" style="margin-top:14px"><div class="l">本地端口 <span class="muted">(点击「结束」可终止监听进程)</span></div><table><tr><th>端口</th><th class="num">监听</th><th class="num">Established</th><th></th></tr>';
+    (d.ports||[]).forEach(function(p){h+='<tr><td><code>'+esc(p.port)+'</code></td><td class="num">'+p.listen+'</td><td class="num">'+p.estab+'</td><td style="text-align:right">'+(p.listen>0?'<button class="mini danger" onclick="killConn(\''+esc(p.port)+'\')">结束</button>':'')+'</td></tr>'});
+    h+='</table></div>';
+    $('view').innerHTML=h;
+  }).catch(function(){$('view').innerHTML='<span class="hot">无法获取连接信息</span>'});
+}
+function killConn(port){if(!confirm('确定结束监听端口 '+port+' 的进程？'))return;post('/api/conn/kill',{port:port},function(res){toast(res&&res.msg||'已请求');loadNet()})}
+
+/* ---- 实时日志 ---- */
+var LOGlIv=0, LOGlPos=0, LOGlFile='';
+function loadLogCfg(){
+  var h='<div class="card" style="padding:6px 18px 18px"><div class="l" style="padding-top:14px">实时日志（tail -f）</div>'
+    +'<div class="muted" style="line-height:1.8">输入要跟随的日志文件绝对路径，面板每 2 秒增量拉取新增内容（不连续轮询，常驻内存不增）。</div></div>'
+    +'<div class="card" style="margin-top:14px"><div class="l">选择/输入路径</div><div class="toolbar" style="margin-top:8px">'
+    +'<input id="lgfile" list="lglist" placeholder="/var/log/syslog 或任意文件" style="flex:1" value="'+(LOGlFile||'')+'">'
+    +'<datalist id="lglist">'+['/var/log/syslog','/var/log/messages','/var/log/nginx/access.log','/var/log/nginx/error.log','/var/log/auth.log','/var/log/dmesg','/tmp/vpanel.log'].map(function(x){return '<option value="'+x+'">'}).join('')+'</datalist>'
+    +'<button class="pri" onclick="startLog()">跟随</button></div>'
+    +'<div class="toolbar" style="margin-top:8px"><button class="mini" onclick="stopLog()">停止</button> <button class="mini" onclick="clearLogView()">清屏</button></div></div>'
+    +'<div class="card" style="margin-top:14px"><div class="l">输出</div><pre id="lgout" style="white-space:pre-wrap;word-break:break-all;max-height:480px;overflow:auto;font-size:12px;background:var(--line);border-radius:10px;padding:12px;margin-top:8px">启动跟随后显示…</pre></div>';
+  $('view').innerHTML=h;
+  if(LOGlFile)startLog();
+}
+function startLog(){var f=($('lgfile')?$('lgfile').value:LOGlFile||'').trim();if(!f){toast('请先输入文件路径');return}LOGlFile=f;stopLog();
+  fetch('/api/log/tail?file='+encodeURIComponent(f)+'&n=100').then(function(r){return r.json()}).then(function(d){
+    if(!d.ok){$('lgout').textContent='读取失败: '+(d.msg||'');return}
+    LOGlPos=d.size;var el=$('lgout');el.textContent=(d.lines||[]).join('\n');el.scrollTop=el.scrollHeight;
+    LOGlIv=setInterval(function(){followLog()},2000);
+  });
+}
+function followLog(){fetch('/api/log/follow?file='+encodeURIComponent(LOGlFile)+'&pos='+LOGlPos).then(function(r){return r.json()}).then(function(d){
+    if(!d.ok){return}
+    LOGlPos=d.size;var lines=d.lines||[];if(!lines.length)return;var el=$('lgout');if(!el)return;
+    el.textContent=(el.textContent?el.textContent+'\n':'')+lines.join('\n');el.scrollTop=el.scrollHeight;
+  });
+}
+function stopLog(){clearInterval(LOGlIv);LOGlIv=0;toast('已停止跟随')}
+function clearLogView(){var el=$('lgout');if(el)el.textContent='';LOGlPos=0}
+
+/* ---- 文件管理 ---- */
+function loadFs(path){
+  fetch('/api/files?path='+encodeURIComponent(path)).then(function(r){return r.json()}).then(function(d){
+    if(!d.ok){$('view').innerHTML='<span class="hot">'+(d.msg||'无法读取目录')+'</span>';return}
+    var cur=d.path||'/';LOGLCPATH=cur;
+    var h='<div class="card" style="padding:6px 18px 18px"><div class="toolbar" style="padding-top:6px">'
+      +'<code style="flex:1;background:var(--line);padding:10px 12px;border-radius:10px">'+esc(cur)+'</code>'
+      +'<input type="file" id="upfile" style="display:none">'
+      +'<button class="pri" onclick="pickUp()">上传到当前目录</button></div>'
+      +'<div class="muted" style="margin-top:6px">点击目录进入，点击文件名查看/下载/删除。</div></div>';
+    h+='<div class="card" style="margin-top:14px"><table><tr><th>名称</th><th class="num">大小</th><th>修改时间</th><th></th></tr>';
+    if(cur!=='/'){
+      var pp=cur.replace(/\/+$/,'');var idx=pp.lastIndexOf('/');var parent=idx>0?pp.slice(0,idx):'/';
+      h+='<tr onclick="loadFs(\''+esc(parent)+'\')" style="cursor:pointer"><td>&#9650; 返回上级</td><td></td><td></td><td></td></tr>';
+    }
+    (d.list||[]).forEach(function(f){
+      var fp=cur.replace(/\/+$/,'')+'/'+f.name;
+      if(f.dir){
+        h+='<tr onclick="loadFs(\''+esc(fp)+'\')" style="cursor:pointer"><td><span class="warm">&#128193;</span> '+esc(f.name)+'</td><td></td><td>'+fmtDate(f.mtime)+'</td><td style="text-align:right"><button class="mini danger" onclick="event.stopPropagation();fsDel(\''+esc(fp)+'\')">删除</button></td></tr>';
+      }else{
+        h+='<tr><td onclick="fsRead(\''+esc(fp)+'\')" style="cursor:pointer">'+esc(f.name)+'</td><td class="num">'+f.human+'</td><td>'+fmtDate(f.mtime)+'</td>'
+         +'<td style="text-align:right"><button class="mini" onclick="fsDown(\''+esc(fp)+'\')">下载</button> <button class="mini danger" onclick="fsDel(\''+esc(fp)+'\')">删除</button></td></tr>';
+      }
+    });
+    h+='</table>'+muted((d.list||[]).length+' 个条目')+'</div>';
+    $('view').innerHTML=h;
+  }).catch(function(){$('view').innerHTML='<span class="hot">无法连接 /api/files</span>'});
+}
+function pickUp(){var i=$('upfile');i.onchange=function(){var f=i.files[0];if(!f)return;uploadFile(LOGLCPATH,f)};i.click()}
+var LOGLCPATH='/';
+function uploadFile(dir,file){
+  var target=dir.replace(/\/+$/,'')+'/'+file.name;
+  var btn=document.querySelector('#view .pri');if(btn){btn.disabled=true;btn.textContent='上传中…'}
+  fetch('/api/file/upload?path='+encodeURIComponent(target),{method:'POST',body:file})
+    .then(function(r){return r.json()}).then(function(res){toast(res&&res.msg||('已上传 '+file.name));loadFs(dir)})
+    .catch(function(){toast('上传失败')});
+}
+function fsRead(path){fetch('/api/file/read?path='+encodeURIComponent(path)).then(function(r){return r.json()}).then(function(d){
+    if(!d.ok){toast(d.msg||'读取失败');return}
+    var h='<div class="toolbar"><code style="flex:1;background:var(--line);padding:10px 12px;border-radius:10px">'+esc(d.name)+'</code>'
+      +'<button class="mini" onclick="loadFs(\''+esc(parentDir(d.name))+'\')">返回目录</button>'
+      +'<button class="pri" onclick="fsSave(\''+esc(d.name)+'\')">保存</button></div>';
+    h+='<div class="card" style="margin-top:14px"><textarea id="fsed" style="width:100%;height:70vh;font-family:monospace;font-size:12px;border:1px solid var(--line);border-radius:10px;padding:12px">'+esc(d.data)+'</textarea></div>';
+    $('view').innerHTML=h;
+  }).catch(function(){toast('无法读取')});
+}
+function parentDir(p){var i=p.replace(/\/+$/,'').lastIndexOf('/');return i>0?p.slice(0,i):'/'}
+function fsSave(path){var data=$('fsed').value;post('/api/file/save',{path:path,data:data},function(res){toast(res&&res.msg||'已保存');loadFs(parentDir(path))})}
+function fsDel(path){if(!confirm('确定删除 '+path+' ？（目录会递归删除）'))return;post('/api/file/delete',{path:path},function(res){toast(res&&res.msg||'已删除');loadFs(parentDir(path))})}
+function fsDown(path){window.location='/api/file/download?path='+encodeURIComponent(path)}
 
 renderTabs();choose();
 </script>

@@ -7,6 +7,7 @@
 mod api;
 mod config;
 mod ctl;
+mod extra;
 mod http;
 mod json;
 mod lang;
