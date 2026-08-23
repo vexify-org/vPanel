@@ -1,0 +1,21 @@
+[package]
+name = "panel"
+version = "0.1.0"
+edition = "2021"
+description = "A tiny, low-memory HTTP dashboard panel with YAML config, built in pure Rust."
+
+[[bin]]
+name = "panel"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+
+[profile.release]
+# 尽力把二进制和常驻内存压到最小
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
