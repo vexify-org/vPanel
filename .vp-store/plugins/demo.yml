@@ -1,13 +1,10 @@
-# vPanel 示例插件：演示微脚本语言的完整能力。
-# 放任意 *.yml 到 plugins/ 目录即可被加载。
+# vp-store 内置的 demo 插件（与本地插件目录一致）。
 name: demo
 version: 1.1.0
 desc: 示例插件：条件/循环/比较、工具入参、KV 持久化、文本/数学函数、结构化返回
-# 请求公共仓库在线更新本插件: 商店 → demo → 安装/更新
 url: plugins/demo.yml
 
 tools:
-  # 无参工具：变量 + 命令 + 字符串拼接 + ret 返回
   - id: uptime
     desc: 显示系统运行时长（变量 + cmd + 拼接）
     script: |
@@ -15,7 +12,6 @@ tools:
       host = cmd("hostname")
       ret("主机 " + host + " 已运行 " + now)
 
-  # 带参工具：演示前端表单 / MCP inputSchema（arg 读取入参）
   - id: greet
     desc: 用入参打招呼（arg 读取工具入参）
     params:
@@ -44,7 +40,6 @@ tools:
       end
       ret("问候: " + out)
 
-  # KV 持久化：kv_get / kv_set 跨重启保留
   - id: counter
     desc: KV 计数器（kv_set/kv_get 持久化，重启不丢）
     script: |
@@ -53,7 +48,6 @@ tools:
       kv_set("count", itoa(c))
       ret("累计执行 " + itoa(c) + " 次")
 
-  # 文本/数学函数 + 结构化 JSON 返回（供 MCP / 前端解析）
   - id: analyze
     desc: 文本/数学函数演示，返回结构化 JSON（json()）
     script: |
@@ -69,7 +63,7 @@ tools:
 tasks:
   - id: heartbeat
     every: 10
-    desc: 每 10 秒打印一次心跳（log 记录的 KV 计数可用来做统计）
+    desc: 每 10 秒打印一次心跳
     script: |
       t = cmd("date \"+%H:%M:%S\"")
       log("心跳 " + t)

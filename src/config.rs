@@ -212,6 +212,15 @@ const CANDIDATES: &[&str] = &["panel.yml", "panel.yaml", "config.yml", "config.y
 /// 从路径加载 YAML；文件缺失或解析失败时回退到默认配置，
 /// 保证进程始终能启动（常驻可用性的第一原则）。
 impl Config {
+    /// 面板数据目录：默认当前工作目录，可用环境变量 VPVPANEL_DIR 覆盖。
+    pub fn panel_dir() -> String {
+        std::env::var("VPVPANEL_DIR")
+            .unwrap_or_else(|_| match std::env::var("PWD") {
+                Ok(p) if !p.is_empty() => p,
+                _ => ".".to_string(),
+            })
+    }
+
     pub fn load(path: &str) -> Config {
         match std::fs::read_to_string(path) {
             Ok(s) => serde_yaml::from_str(&s).unwrap_or_else(|_| Config::default()),

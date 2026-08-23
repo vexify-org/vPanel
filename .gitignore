@@ -1,1 +1,4 @@
 /target/
+# 插件系统运行时状态（KV / 禁用开关），不应提交
+/.vpanel-plugins-kv.json
+/.vpanel-plugins-disabled.json

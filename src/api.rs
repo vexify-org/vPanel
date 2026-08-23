@@ -13,6 +13,23 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
         "/api/firewall" => crate::ctl::firewall_json(),
         "/api/tasks" => crate::ctl::tasks_json(),
         "/api/plugins" => state.plugins.list_json(),
+        "/api/plugin/kv" => state.plugins.kv_list_json(),
+        "/api/plugin/store" => state.plugins.store_list_json(&state.cfg),
+        "/api/plugin/store/install" => {
+            if method != "POST" {
+                err("需要 POST")
+            } else {
+                let fields = json::parse_form(body);
+                let id = json::form_get(&fields, "id").unwrap_or("").trim().to_string();
+                if id.is_empty() {
+                    err("缺少 id")
+                } else {
+                    let (ok, msg) = state.plugins.store_install(&id, &state.cfg);
+                    ok_bool(ok, msg)
+                }
+            }
+        }
+        target if target.starts_with("/api/plugin/") => plugin_call(target, body, state),
         "/api/shop" => state.shop.list_json(&state.cfg),
         "/api/shop/install" => {
             if method != "POST" {
@@ -28,7 +45,7 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
                 }
             }
         }
-        target if target.starts_with("/api/plugin/") => plugin_call(target, state),
+        target if target.starts_with("/api/plugin/") => plugin_call(target, body, state),
         _ => {
             if method == "POST" {
                 action_route(target, body)
@@ -40,16 +57,45 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
     resp.into_bytes()
 }
 
-/// `/api/plugin/<plugin>/<tool>`：调用插件工具。
-fn plugin_call(target: &str, state: &State) -> String {
+/// `/api/plugin/<plugin>/<tool>`：调用插件工具，可选入参（body 为表单）。
+/// 特殊尾部动作：`enable` / `disable` / `uninstall`。
+fn plugin_call(target: &str, body: &[u8], state: &State) -> String {
     let rest = &target["/api/plugin/".len()..];
     let mut it = rest.splitn(2, '/');
-    let plugin = it.next().unwrap_or("").trim().to_string();
-    let tool = it.next().unwrap_or("").trim().to_string();
-    if plugin.is_empty() || tool.is_empty() {
+    let first = it.next().unwrap_or("").trim().to_string();
+    let second = it.next().unwrap_or("").trim().to_string();
+    if first.is_empty() {
         return err("用法: /api/plugin/<插件名>/<工具id>");
     }
-    let (ok, msg) = state.plugins.call_tool(&plugin, &tool);
+    // 启用 / 禁用 / 卸载
+    match second.as_str() {
+        "enable" => {
+            let (ok, msg) = state.plugins.set_enabled(&first, true);
+            return ok_bool(ok, msg);
+        }
+        "disable" => {
+            let (ok, msg) = state.plugins.set_enabled(&first, false);
+            return ok_bool(ok, msg);
+        }
+        "uninstall" => {
+            let (ok, msg) = state.plugins.store_uninstall(&first, &state.cfg);
+            return ok_bool(ok, msg);
+        }
+        _ => {}
+    }
+    let plugin = first;
+    let tool = second;
+    if tool.is_empty() {
+        return err("用法: /api/plugin/<插件名>/<工具id>");
+    }
+    let fields = json::parse_form(body);
+    let mut args = std::collections::HashMap::new();
+    for (k, v) in fields {
+        if k != "id" {
+            args.insert(k, v);
+        }
+    }
+    let (ok, msg) = state.plugins.call_tool(&plugin, &tool, args);
     ok_bool(ok, msg)
 }
 

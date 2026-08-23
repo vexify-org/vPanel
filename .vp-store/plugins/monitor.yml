@@ -1,0 +1,46 @@
+# vp-store 内置的 monitor 插件：系统监控守卫。
+# 演示 while 明显地控制流 + KV 记录告警次数 + 阈值比较。
+name: monitor
+version: 1.0.0
+desc: 系统监控守卫：内存/负载过高时告警并记录告警次数（演示阈值比较 + KV 记次）
+url: plugins/monitor.yml
+
+tools:
+  - id: check
+    desc: 检查负载与内存，超过阈值即告警（if 比较 + KV 记次）
+    params:
+      - id: load
+        name: 负载阈值
+        type: number
+        required: false
+        default: "4"
+        desc: 1 分钟负载超过该值视为告警
+    script: |
+      thr = atoi(arg("load"))
+      if thr == 0
+        thr = 4
+      end
+      load1 = atoi(cmd("cat /proc/loadavg | cut -d' ' -f1"))
+      mem = cmd("free -m | awk 'NR==2{printf \"%.0f\", $3/$2*100}'")
+      memp = atoi(mem)
+      if load1 > thr || memp > 90
+        n = atoi(kv_get("alerts"))
+        n = n + 1
+        kv_set("alerts", itoa(n))
+        ret("告警 #" + itoa(n) + "：负载=" + itoa(load1) + " 内存=" + itoa(memp) + "%")
+      else
+        ret("正常：负载=" + itoa(load1) + "，内存=" + itoa(memp) + "%")
+      end
+
+tasks:
+  - id: tick
+    every: 15
+    desc: 每 15 秒采样一次并记录
+    script: |
+      load1 = cmd("cat /proc/loadavg | cut -d' ' -f1")
+      log("load=" + load1)
+
+hooks:
+  - event: on_tick
+    script: |
+      # 占位：演示事件钩子挂载

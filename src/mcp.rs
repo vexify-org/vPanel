@@ -79,7 +79,7 @@ fn tools_list(id: Option<i64>, state: &State) -> String {
             schema
         ));
     }
-    // 追加插件工具。
+    // 追加插件工具（依据工具 params 生成 inputSchema）。
     for p in plugins_snapshot(state) {
         for t in &p.tools {
             let mut s = String::new();
@@ -89,8 +89,26 @@ fn tools_list(id: Option<i64>, state: &State) -> String {
             s.push_str(&p.name);
             s.push_str("] ");
             s.push_str(&json::jesc(&t.desc));
-            s.push_str("\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}}");
-            // 说明：上面 `{}}}` 前部的 `{}` 是 properties 空对象，`}` 关 inputSchema，最后一个 `}` 关工具对象。
+            // 由 params 生成 properties 对象。
+            let mut props = Vec::new();
+            for pp in &t.params {
+                let ty = match pp.r#type.as_str() {
+                    "number" => "number",
+                    "bool" => "boolean",
+                    _ => "string",
+                };
+                props.push(format!(
+                    "\"{}\":{{\"type\":\"{}\",\"description\":\"{}\"}}",
+                    json::jesc(&pp.id),
+                    ty,
+                    json::jesc(if pp.desc.is_empty() { &pp.name } else { &pp.desc })
+                ));
+            }
+            s.push_str(&format!(
+                "\",\"inputSchema\":{{\"type\":\"object\",\"properties\":{{{}}}}}",
+                props.join(",")
+            ));
+            s.push('}');
             item.push(s);
         }
     }
@@ -138,7 +156,7 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
             Ok(p) => (crate::system::kill_pid(p), format!("请求结束进程 {}", p)),
             Err(_) => (false, "pid 需为数字".into()),
         },
-        _ => plugin_or_unknown(state, name.as_str()),
+        _ => plugin_or_unknown(state, name.as_str(), &args),
     };
     let result = format!(
         "{{\"content\":[{{\"type\":\"text\",\"text\":\"{}\"}}],\"isError\":{}}}",
@@ -243,13 +261,91 @@ fn plugins_snapshot(state: &State) -> Vec<crate::plugins::Plugin> {
 }
 
 /// 若非内置工具，尝试按插件工具派发；找不到则返回“未知工具”。
-fn plugin_or_unknown(state: &State, name: &str) -> (bool, String) {
+fn plugin_or_unknown(state: &State, name: &str, args: &str) -> (bool, String) {
+    let amap = parse_json_obj(args);
     for p in plugins_snapshot(state) {
         for t in &p.tools {
             if plugin_tool_name(&p, &t.id) == name {
-                return state.plugins.call_tool(&p.name, &t.id);
+                return state.plugins.call_tool(&p.name, &t.id, amap);
             }
         }
     }
     (false, format!("未知工具: {}", name))
+}
+
+/// 宽松解析 `{"k1":"v1","k2":123,...}` 顶层对象，返回键值对（非字符串值转文本）。
+fn parse_json_obj(s: &str) -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    let body = s.trim();
+    let body = body.strip_prefix('{').unwrap_or(body);
+    let body = body.strip_suffix('}').unwrap_or(body);
+    let mut i = 0;
+    let b = body.as_bytes();
+    while i < b.len() {
+        // 找 key 引号
+        while i < b.len() && b[i] != b'"' {
+            i += 1;
+        }
+        if i >= b.len() {
+            break;
+        }
+        i += 1;
+        let ks = i;
+        while i < b.len() && b[i] != b'"' {
+            i += 1;
+        }
+        if i >= b.len() {
+            break;
+        }
+        let key = body[ks..i].to_string();
+        i += 1;
+        // 跳过冒号与空白
+        while i < b.len() && (b[i] == b':' || b[i].is_ascii_whitespace()) {
+            i += 1;
+        }
+        // 值：字符串或裸值
+        if i < b.len() && b[i] == b'"' {
+            i += 1;
+            let vs = i;
+            while i < b.len() && b[i] != b'"' {
+                if b[i] == b'\\' {
+                    i += 1;
+                }
+                i += 1;
+            }
+            out.insert(key, unescape_str(&body[vs..i.min(body.len())]));
+            i += 1;
+        } else {
+            let vs = i;
+            while i < b.len() && b[i] != b',' && b[i] != b'}' {
+                i += 1;
+            }
+            out.insert(key, body[vs..i.min(body.len())].trim().to_string());
+        }
+        // 跳过逗号
+        while i < b.len() && b[i] != b'"' && b[i] != b'{' {
+            i += 1;
+        }
+    }
+    out
+}
+
+fn unescape_str(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => out.push('\n'),
+                Some('t') => out.push('\t'),
+                Some('"') => out.push('"'),
+                Some('\\') => out.push('\\'),
+                Some(o) => out.push(o),
+                None => {}
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }

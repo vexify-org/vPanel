@@ -1,0 +1,12 @@
+# vp-store 插件商店清单
+# 面板访问 /api/plugin/store 拉取本文件；每个条目指向仓库内相对路径的插件清单。
+plugins:
+  - id: demo
+    name: demo
+    desc: 官方示例插件：条件/循环/参数/KV/文本数学/结构化返回
+    file: plugins/demo.yml
+
+  - id: monitor
+    name: monitor
+    desc: 系统监控守卫：当内存/CPU 过高时按阈值告警（演示 if/while + KV 记次）
+    file: plugins/monitor.yml

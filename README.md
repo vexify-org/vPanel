@@ -49,31 +49,64 @@ cargo build --release
 
 ### 插件（极简 DSL + 微脚本语言）
 
-插件用 YAML 描述，放到插件目录（默认 `plugins/`）即自动加载；脚本用自研的微语言（单行语句、字符串/变量/`+` 拼接），内置函数：
+插件用 YAML 描述，放到插件目录（默认 `plugins/`）即自动加载。脚本是自研微语言：**缩进块 + 控制流**，支持条件/循环/比较、工具入参、键值（KV）持久化与文本/数学函数库，完全不引入重型运行时，每次执行新建解释器、跑完即释放。
 
-- `cmd("...")` 执行 shell 命令并捕获输出
-- `fetch("url"[, timeout])` HTTP 拉取（走 curl，支持 HTTPS）
-- `ret("...")` 标记脚本返回值
-- `log("...")` 写入面板插件日志
+**语言能力**
+
+- 变量（字符串 / 数字 / 布尔）、赋值、算术 `+ - * / %`、字符串 `+` 拼接
+- 比较 `== != < <= > >=` 与逻辑 `and or not`
+- 控制流：`if / else`、`for i in range(n)`、`while`、`break / continue`；块以缩进界定，`end` 为显式终止符
+- 工具入参：`arg("id")` / `has_arg("id")`（前端表单 / MCP 传入）
+- KV 持久化：`kv_set("k","v")` / `kv_get("k")`，按插件命名空间隔离、自动落盘，跨重启保留
+- 内置函数：`cmd` / `fetch` / `ret` / `log` / `env` / `var`，文本 `len/substr/split/atoi/itoa/upper/lower/trim`，数学 `min/max/round/ceil/floor`，结构化 `json("...")`
+
+**管理能力**
+
+- **启用 / 禁用开关**：`POST /api/plugin/<名>/enable` / `disable`，状态持久化，禁用后工具/任务/钩子不再触发
+- **生命周期**：卸载 `POST /api/plugin/<名>/uninstall` 删除清单文件并热重载，内存随即释放
+- **在线安装 / 更新**：`GET /api/plugin/store` 从 `vp-store` 拉插件清单；`POST /api/plugin/store/install`（`id`）下载到插件目录并热重载，等于安装或升级
+- **自定义表单 / 页面**：工具声明 `params`（name/type/required/default/options）后，前端自动渲染参数表单，MCP 自动生成 `inputSchema`
+- 工具注入前端与 MCP（MCP 工具名形如 `p_<插件>_<工具>`）、自带周期任务、20 个事件钩子
 
 示例插件 `plugins/demo.yml`：
 
 ```yaml
 name: demo
-version: 1.0.0
-desc: 示例插件
+version: 1.1.0
 tools:
-  - id: uptime                 # 暴露为 /api/plugin/demo/uptime 与 MCP 的 p_demo_uptime
-    desc: 显示系统运行时长
+  - id: greet                 # /api/plugin/demo/greet 与 MCP 的 p_demo_greet
+    desc: 用入参打招呼
+    params:                     # 前端据此渲染表单，MCP 据此生成 inputSchema
+      - id: name
+        name: 称呼
+        type: string
+        required: true
+      - id: times
+        name: 次数
+        type: number
+        default: "1"
     script: |
-      host = cmd("hostname")
-      ret("主机 {host}")
+      n = arg("times")
+      if n == "" || n == "0"
+        n = 1
+      end
+      out = ""
+      for i in range(atoi(n))
+        out = out + "你好，" + arg("name") + "（第" + itoa(i + 1) + "次）"
+      end
+      ret("问候: " + out)
+  - id: counter                 # KV 持久化
+    desc: KV 计数器（重启不丢）
+    script: |
+      c = atoi(kv_get("count")) + 1
+      kv_set("count", itoa(c))
+      ret("累计执行 " + itoa(c) + " 次")
 tasks:                          # 面板自带周期任务（不依赖 crontab）
   - id: heartbeat
     every: 10
     script: |
       log("心跳 " + cmd("date \"+%H:%M:%S\""))
-hooks:                          # 20 个事件钩子之一（on_init / on_tick / on_http_request ...）
+hooks:                          # 20 个事件钩子之一
   - event: on_init
     script: |
       log("插件已加载")

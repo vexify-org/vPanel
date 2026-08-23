@@ -246,8 +246,10 @@ function shopInstall(id){if(!confirm('将下载并安装 '+id+' ，确定？'))r
 
 function loadPlug(){
   var h='<div class="card" style="padding:6px 18px 18px"><div class="l" style="padding-top:14px">插件（极简 DSL + 微脚本语言）</div>'
-    +'<div class="muted" style="line-height:1.8">在配置的插件目录（默认 <code>plugins/</code>）放 <code>*.yml</code>；每个插件可声明工具、周期任务与事件钩子。脚本内置 <code>cmd()</code> / <code>fetch()</code> / <code>ret()</code> / <code>log()</code>，工具可被前端与 MCP 调用。</div></div>'
+    +'<div class="muted" style="line-height:1.8">在插件目录（默认 <code>plugins/</code>）放 <code>*.yml</code>；脚本支持 <code>if/else</code>、<code>for/while</code>、算术比较、<code>cmd()/fetch()/ret()/log()</code>、文本/数学函数、工具入参 <code>arg()</code> 与 KV 持久化 <code>kv_set()/kv_get()</code>。可从软件商店在线安装/更新/卸载。</div></div>'
+    +'<div class="card" style="margin-top:14px"><div class="l">在线安装 <span class="muted">（来自 vp-store 仓库）</span></div><div id="plgstore" style="padding-top:6px"><button class="mini pri" onclick="loadPlugStore()">拉取商店清单</button></div></div>'
     +'<div class="card" style="margin-top:14px"><div class="l">已加载插件</div><div id="plglist" style="padding-top:6px">加载中…</div></div>'
+    +'<div class="card" style="margin-top:14px"><div class="l">持久化 KV</div><div id="plgkv" style="padding-top:6px">—</div></div>'
     +'<div class="card" style="margin-top:14px"><div class="l">最近日志</div><div id="plglogs" style="padding-top:6px">—</div></div>';
   $('view').innerHTML=h;
   fetch('/api/plugins').then(function(r){return r.json()}).then(function(d){
@@ -255,17 +257,62 @@ function loadPlug(){
     if(!d.ok){el.innerHTML='<span class="hot">获取插件失败</span>';return}
     if(!(d.plugins||[]).length){el.innerHTML='<span class="muted">尚未加载任何插件</span>';}
     else{el.innerHTML='<table><tr><th>插件</th><th>版本</th><th>工具</th><th>定时</th><th></th></tr>'+(d.plugins||[]).map(function(p){
-      return '<tr><td><b>'+esc(p.name)+'</b><div class="muted">'+esc(p.desc)+'</div></td><td class="muted">'+esc(p.version)+'</td>'
+      var runs=(p.tools||[]).map(function(t){return '<button class="mini pri" onclick="plugRun(\''+esc(p.name)+'\',\''+esc(t.id)+'\',\''+esc(JSON.stringify(t.params||[]))+'\')">运行 '+esc(t.id)+'</button>'}).join(' ');
+      var tg=p.enabled
+        ?'<button class="mini" onclick="plugSwitch(\''+esc(p.name)+'\',\'disable\')">禁用</button>'
+        :'<button class="mini" onclick="plugSwitch(\''+esc(p.name)+'\',\'enable\')">启用</button>';
+      var un='<button class="mini danger" onclick="plugUninstall(\''+esc(p.name)+'\')">卸载</button>';
+      return '<tr><td><b>'+esc(p.name)+'</b>'+(p.enabled?'':' <span class="hot">已禁用</span>')+'<div class="muted">'+esc(p.desc)+'</div></td><td class="muted">'+esc(p.version)+'</td>'
        +'<td>'+(p.tools||[]).map(function(t){return '<code>'+esc(t.id)+'</code>'}).join(' ')+'</td>'
        +'<td class="muted">'+(p.tasks||[]).map(function(t){return t.id+' /'+t.every+'s'}).join(' ')+'</td>'
-       +'<td style="text-align:right">'+(p.tools||[]).map(function(t){return '<button class="mini pri" onclick="plugRun(\''+esc(p.name)+'\',\''+esc(t.id)+'\')">运行 '+esc(t.id)+'</button>'}).join(' ')+'</td></tr>'}).join('')+'</table>'+muted('钩子事件表：'+['on_init','on_shutdown','on_tick','on_http_request','on_snapshot','on_process_list','on_service_start','on_service_stop','on_service_restart','on_firewall_allow','on_firewall_del','on_task_add','on_task_del','on_login','on_logout','on_shop_install','on_disk_low','on_cpu_high','on_mem_high','on_cron'].join(' · '));}
+       +'<td style="text-align:right">'+runs+' '+tg+' '+un+'</td></tr>'}).join('')+'</table>'+muted('钩子事件表：'+HOOKS.join(' · '));}
+    var kv=$('plgkv');fetch('/api/plugin/kv').then(function(r){return r.json()}).then(function(k){kv.innerHTML=(k.kv||[]).map(function(x){return '<code>'+esc(x.k)+'</code> = <span>'+esc(x.v)+'</span>'}).join('<br>')||'<span class="muted">暂无 KV 数据</span>'});
     var lg=$('plglogs');
     lg.innerHTML=(d.logs||[]).length?'<pre style="white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;font-size:12px">'+(d.logs||[]).map(function(x){return esc(x)}).join('\n')+'</pre>':'<span class="muted">暂无日志</span>';
   }).catch(function(){var el=$('plglist');el.innerHTML='<span class="hot">无法连接 /api/plugins</span>'});
 }
-function plugRun(plugin,tool){var b=document.activeElement;b.disabled=true;b.textContent='运行中…';post('/api/plugin/'+encodeURIComponent(plugin)+'/'+encodeURIComponent(tool),{},function(res){
-  b.disabled=false;b.textContent='运行 '+tool;toast(res.msg||('请求已发出 '+plugin+'/'+tool));
+var HOOKS=['on_init','on_shutdown','on_tick','on_http_request','on_snapshot','on_process_list','on_service_start','on_service_stop','on_service_restart','on_firewall_allow','on_firewall_del','on_task_add','on_task_del','on_login','on_logout','on_shop_install','on_disk_low','on_cpu_high','on_mem_high','on_cron'];
+function loadPlugStore(){
+  var el=$('plgstore');el.innerHTML='<span class="muted">拉取中…</span>';
+  fetch('/api/plugin/store').then(function(r){return r.json()}).then(function(d){
+    if(!d.ok){el.innerHTML='<span class="hot">'+esc(d.msg||'拉取失败')+'</span>';return}
+    if(!(d.list||[]).length){el.innerHTML='<span class="muted">商店暂无可用插件（需要 vp-store 仓库提供 plugins.yml）</span>';return}
+    el.innerHTML='<table><tr><th>插件</th><th>说明</th><th></th></tr>'+(d.list||[]).map(function(i){
+      return '<tr><td><b>'+esc(i.name)+'</b> <span class="muted">'+esc(i.id)+'</span></td><td>'+esc(i.desc)+'</td><td style="text-align:right"><button class="mini ok" onclick="plugInstall(\''+esc(i.id)+'\')">安装/更新</button></td></tr>'}).join('')+'</table>'+muted(d.mode==='builtin'?'当前为内置空清单，请确认网络/仓库可访问':'清单来源：vp-store');
+  }).catch(function(){el.innerHTML='<span class="hot">无法连接 /api/plugin/store</span>'});
+}
+function plugInstall(id){if(!confirm('从商店安装/更新插件 '+id+' ？'))return;var b=document.activeElement;b.disabled=true;b.textContent='安装中…';post('/api/plugin/store/install',{id:id},function(res){b.disabled=false;b.textContent='安装/更新';toast(res.msg||('已请求安装 '+id));loadPlug();})}
+function plugSwitch(name,on){post('/api/plugin/'+encodeURIComponent(name)+'/'+on,{},function(res){toast(res.msg||'已切换');loadPlug()})}
+function plugUninstall(name){if(!confirm('确定卸载插件 '+name+' ？这会删除其清单文件。'))return;post('/api/plugin/'+encodeURIComponent(name)+'/uninstall',{},function(res){toast(res.msg||('已请求卸载 '+name));loadPlug()})}
+function plugRun(plugin,tool,paramsJson){
+  var params=paramsJson?JSON.parse(paramsJson):[];
+  if(params.length){showForm(plugin,tool,params);return;}
+  doRun(plugin,tool,{},document.activeElement);
+}
+function doRun(plugin,tool,fields,b){if(b){b.disabled=true;b.textContent='运行中…';}post('/api/plugin/'+encodeURIComponent(plugin)+'/'+encodeURIComponent(tool),fields,function(res){
+  if(b){b.disabled=false;b.textContent='运行 '+tool;}
+  toast(res.msg||('请求已发出 '+plugin+'/'+tool));
 })}
+function showForm(plugin,tool,params){
+  var h='<div class="card"><div class="l">设置参数 · '+esc(plugin)+'/'+esc(tool)+'</div><div class="muted" style="line-height:1.6">该工具需要以下入参，脚本用 <code>arg("id")</code> 读取。</div><form class="rowform" style="flex-wrap:wrap" onsubmit="runForm(event,\''+esc(plugin)+'\',\''+esc(tool)+'\')">';
+  params.forEach(function(p){
+    h+='<label style="min-width:140px">'+esc(p.name||p.id)+(p.required?' <span class="hot">*</span>':'')+'</label>';
+    var nm='name="'+esc(p.id)+'"';
+    if(p.type==='select'){
+      h+='<select '+nm+' style="flex:1;min-width:160px">'+(p.options||'').split(',').map(function(o){return '<option value="'+esc(o.trim())+'">'+esc(o.trim())+'</option>'}).join('')+'</select>';
+    }else if(p.type==='bool'){
+      h+='<select '+nm+' style="flex:1;min-width:160px"><option value="true">true</option><option value="false">false</option></select>';
+    }else{
+      h+='<input '+nm+' type="'+(p.type==='number'?'number':'text')+'" placeholder="'+esc(p.desc)+'" value="'+esc(p.default)+'" style="flex:1;min-width:160px">';
+    }
+    h+='<span class="muted" style="width:100%;font-size:12px">'+esc(p.desc)+'</span>';
+  });
+  h+='<button class="pri" type="submit">执行</button></form></div>';
+  $('view').innerHTML=h;
+}
+function runForm(e,plugin,tool){e.preventDefault();var args={};var f=new FormData(e.target);f.forEach(function(v,k){args[k]=v});var s=$('view');s.innerHTML='<div class="card" style="padding:30px;text-align:center"><span class="muted">执行中…</span></div>';
+  post('/api/plugin/'+encodeURIComponent(plugin)+'/'+encodeURIComponent(tool),args,function(res){toast(res.msg||'已执行');loadPlug();});
+}
 
 function loadMCP(){
   var h='<div class="card" style="padding:6px 18px 18px"><div class="l" style="padding-top:14px">连接地址（MCP Streamable HTTP）</div>'
