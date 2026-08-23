@@ -10,6 +10,16 @@ pub struct Config {
     pub panel: Panel,
     #[serde(default)]
     pub shell: Shell,
+    #[serde(default)]
+    pub download: Download,
+}
+
+/// 下载 / 加速配置。
+#[derive(Debug, Clone, Deserialize)]
+pub struct Download {
+    /// 全局下载加速前缀，用于软件商店下载。空则用默认代理。
+    #[serde(default = "d_accel")]
+    pub accel: String,
 }
 
 /// Web 终端（本地 Shell 控制）。
@@ -85,6 +95,14 @@ impl Default for Shell {
     }
 }
 
+impl Default for Download {
+    fn default() -> Self {
+        Download {
+            accel: d_accel(),
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
@@ -101,8 +119,13 @@ impl Default for Config {
                 theme: d_theme(),
             },
             shell: Shell::default(),
+            download: Download::default(),
         }
     }
+}
+
+fn d_accel() -> String {
+    crate::shop::DEFAULT_ACCEL.to_string()
 }
 
 fn d_bind() -> String {
