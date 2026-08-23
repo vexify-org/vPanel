@@ -69,7 +69,7 @@ const PAGE_TEMPLATE: &str = r#"<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>__TITLE__ · Lumen</title>
+<title>__TITLE__ · vPanel</title>
 <style>
 __ROOT__
 *{box-sizing:border-box;margin:0;padding:0}
@@ -111,13 +111,13 @@ form.rowform{display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wr
 .toast{position:fixed;bottom:24px;right:24px;background:#111827;color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;opacity:0;transition:.3s;z-index:50;max-width:80vw}
 .toast.show{opacity:1}
 .muted{color:var(--muted);font-size:12px}
-@media(max-width:760px){.side{display:none}main{padding:16px}main:before{content:"☰  Lumen";font-weight:800;display:block;margin-bottom:14px}}
+@media(max-width:760px){.side{display:none}main{padding:16px}main:before{content:"☰  vPanel";font-weight:800;display:block;margin-bottom:14px}}
 </style>
 </head>
 <body>
 <div class="layout">
   <aside class="side">
-    <div class="brand"><i>L</i>__TITLE__</div>
+    <div class="brand"><i>v</i>__TITLE__</div>
     <div id="tabs"></div>
   </aside>
   <main id="main">

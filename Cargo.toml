@@ -1,11 +1,11 @@
 [package]
-name = "panel"
+name = "vpanel"
 version = "0.1.0"
 edition = "2021"
-description = "A tiny, low-memory HTTP dashboard panel with YAML config, built in pure Rust."
+description = "vPanel: a tiny, low-memory HTTP dashboard panel with YAML config, built in pure Rust."
 
 [[bin]]
-name = "panel"
+name = "vpanel"
 path = "src/main.rs"
 
 [dependencies]

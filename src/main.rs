@@ -1,4 +1,4 @@
-//! Lumen Panel — 极简、低常驻内存的 HTTP 面板。
+//! vPanel — 极简、低常驻内存的 HTTP 面板。
 //!
 //! 用法:
 //!   panel                # 读取 ./panel.yml

@@ -130,7 +130,7 @@ fn d_backlog() -> usize {
     1024
 }
 fn d_title() -> String {
-    "Lumen Panel".to_string()
+    "vPanel".to_string()
 }
 fn d_subtitle() -> String {
     "极简 · 低内存 HTTP 面板".to_string()

@@ -47,7 +47,7 @@ server:
   backlog: 1024      # 连接队列上限，满则拒绝，保证内存有界
 
 panel:
-  title: "Lumen Panel"
+  title: "vPanel"
   subtitle: "极简 · 低内存 HTTP 面板"
   accent: "#2563eb"  # 主题强调色
   theme: "light"     # light | dark
