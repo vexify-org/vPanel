@@ -1,0 +1,16 @@
+# vPanel 插件：网络连通自检
+name: net_check
+version: 1.0.0
+desc: 对网关/DNS/常用站点做一次连通性自检，快速定位断网
+url: plugins/net_check.yml
+
+tools:
+  - id: run
+    desc: 依次 ping 网关、DNS(1.1.1.1)、公网(baidu.com)，返回各结果
+    script: |
+      gw = cmd("ip route | awk '/default/ {print $3}' | head -1")
+      a = cmd("ping -c 1 -W 2 '" + trim(gw) + "' >/dev/null 2>&1 && echo OK || echo FAIL")
+      b = cmd("ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1 && echo OK || echo FAIL")
+      c = cmd("ping -c 1 -W 2 baidu.com >/dev/null 2>&1 && echo OK || echo FAIL")
+      d = cmd("nslookup baidu.com >/dev/null 2>&1 && echo OK || echo FAIL")
+      ret(json("网关(" + trim(gw) + "): " + trim(a) + "\n公网IP(1.1.1.1): " + trim(b) + "\n域名(baidu): " + trim(c) + "\nDNS解析: " + trim(d)))

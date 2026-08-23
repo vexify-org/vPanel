@@ -6,12 +6,157 @@ plugins:
     desc: 官方示例插件：条件/循环/参数/KV/文本数学/结构化返回
     file: plugins/demo.yml
 
-  - id: monitor
-    name: monitor
-    desc: 系统监控守卫：当内存/CPU 过高时按阈值告警（演示 if/while + KV 记次）
-    file: plugins/monitor.yml
+  # ---- v1.3.0 自制插件：系统监控 ----
+  - id: mem_guard
+    name: mem_guard
+    desc: 内存守卫：查看内存占用概览，超阈值告警并列出占用最高进程（含定时任务）
+    file: plugins/mem_guard.yml
 
-  - id: webguard
-    name: webguard
-    desc: 网站在线监测：设置监控 URL，定时探测 DOWN/UP 并累计记录失效/成功次数
-    file: plugins/webguard.yml
+  - id: cpu_load
+    name: cpu_load
+    desc: CPU 负载：查看使用率/负载/核心数，KV 记录历史峰值
+    file: plugins/cpu_load.yml
+
+  - id: top_ram
+    name: top_ram
+    desc: 按内存列出占用最高的进程
+    file: plugins/top_ram.yml
+
+  - id: top_cpu
+    name: top_cpu
+    desc: 采样后按 CPU 使用率列出占用最高的进程
+    file: plugins/top_cpu.yml
+
+  - id: uptime_load
+    name: uptime_load
+    desc: 查看系统运行时长、当前负载、最近启动时间
+    file: plugins/uptime_load.yml
+
+  - id: last_logins
+    name: last_logins
+    desc: 查看最近的登录/登出记录，辅助排查异常登录
+    file: plugins/last_logins.yml
+
+  - id: failed_login
+    name: failed_login
+    desc: 统计 SSH 失败登录尝试，定位爆破来源 IP
+    file: plugins/failed_login.yml
+
+  - id: who_online
+    name: who_online
+    desc: 查看当前在线登录用户、会话数与来源
+    file: plugins/who_online.yml
+
+  - id: service_running
+    name: service_running
+    desc: 列出运行中服务及启动失败(异常)的服务
+    file: plugins/service_running.yml
+
+  # ---- v1.3.0 自制插件：磁盘 ----
+  - id: disk_usage
+    name: disk_usage
+    desc: 查看各挂载分区容量、已用/可用/使用率
+    file: plugins/disk_usage.yml
+
+  - id: disk_top
+    name: disk_top
+    desc: 扫描目录一级子项占用，返回 Top N（du 统计）
+    file: plugins/disk_top.yml
+
+  - id: disk_cleaner
+    name: disk_cleaner
+    desc: 清理系统垃圾：apt 缓存、回收站、旧日志，释放磁盘
+    file: plugins/disk_cleaner.yml
+
+  - id: inode_usage
+    name: inode_usage
+    desc: 查看各分区 inode 使用率，警告 inode 耗尽风险
+    file: plugins/inode_usage.yml
+
+  - id: truncate_logs
+    name: truncate_logs
+    desc: 找出占用大日志文件，支持安全截断
+    file: plugins/truncate_logs.yml
+
+  # ---- v1.3.0 自制插件：网络 ----
+  - id: eth_info
+    name: eth_info
+    desc: 查看各网卡 IP、MAC、状态与公网出口 IP
+    file: plugins/eth_info.yml
+
+  - id: net_check
+    name: net_check
+    desc: 对网关/DNS/公网站点做连通性自检，快速定位断网
+    file: plugins/net_check.yml
+
+  - id: url_probe
+    name: url_probe
+    desc: 探测 URL 的 HTTP 状态码与耗时，判断站点可用性
+    file: plugins/url_probe.yml
+
+  - id: net_io_rate
+    name: net_io_rate
+    desc: 采样网卡实时收发速率，定位带宽占用
+    file: plugins/net_io_rate.yml
+
+  - id: tcp_conn
+    name: tcp_conn
+    desc: 统计 TCP 连接状态分布与外部 IP 连接数
+    file: plugins/tcp_conn.yml
+
+  - id: dns_check
+    name: dns_check
+    desc: 测试域名解析结果与当前 DNS 配置
+    file: plugins/dns_check.yml
+
+  - id: ssl_expiry
+    name: ssl_expiry
+    desc: 查看站点 SSL 证书到期时间
+    file: plugins/ssl_expiry.yml
+
+  # ---- v1.3.0 自制插件：安全 & 加固 ----
+  - id: bbr_status
+    name: bbr_status
+    desc: 检查并一键开启 TCP BBR 网络优化
+    file: plugins/bbr_status.yml
+
+  - id: ssh_hardening
+    name: ssh_hardening
+    desc: 检查 SSH 安全配置薄弱项并给出加固建议
+    file: plugins/ssh_hardening.yml
+
+  - id: port_listen
+    name: port_listen
+    desc: 列出当前正在监听的端口与进程
+    file: plugins/port_listen.yml
+
+  # ---- v1.3.0 自制插件：系统 & 软件 ----
+  - id: os_info
+    name: os_info
+    desc: 查看 OS 名称/版本/内核/架构与 libc 版本
+    file: plugins/os_info.yml
+
+  - id: apt_updates
+    name: apt_updates
+    desc: 统计 apt 可升级包数量与内核更新
+    file: plugins/apt_updates.yml
+
+  - id: cron_list
+    name: cron_list
+    desc: 列出用户 crontab 与系统定时任务
+    file: plugins/cron_list.yml
+
+  - id: swap_info
+    name: swap_info
+    desc: 查看 Swap 使用情况，支持创建/关闭 swap
+    file: plugins/swap_info.yml
+
+  - id: docker_status
+    name: docker_status
+    desc: 查看 Docker 容器状态、镜像数与数据占用
+    file: plugins/docker_status.yml
+
+  - id: cert_list
+    name: cert_list
+    desc: 列出 Let's Encrypt / certbot 签发的证书与到期时间
+    file: plugins/cert_list.yml

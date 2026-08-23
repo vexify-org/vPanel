@@ -1,0 +1,14 @@
+# vPanel 插件：运行时长 / 负载
+name: uptime_load
+version: 1.0.0
+desc: 查看系统运行时长、当前负载、最近启动时间
+url: plugins/uptime_load.yml
+
+tools:
+  - id: info
+    desc: 返回运行时长、负载、开机时间
+    script: |
+      u = cmd("uptime -p")
+      load = cmd("cat /proc/loadavg")
+      boot = cmd("who -b | awk '{print $3, $4}'")
+      ret(json("uptime: " + trim(u) + "\nloadavg: " + trim(load) + "\n上次启动: " + trim(boot)))

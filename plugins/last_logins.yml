@@ -1,0 +1,22 @@
+# vPanel 插件：最近登录记录
+name: last_logins
+version: 1.0.0
+desc: 查看最近的登录/登出记录，辅助排查异常登录
+url: plugins/last_logins.yml
+
+tools:
+  - id: recent
+    desc: 返回最近登录记录（用户名/IP/时间）
+    script: |
+      out = cmd("last -n 15 2>/dev/null")
+      if trim(out) == ""
+        out = cmd("last -n 15 2>&1")
+      end
+      ret(json("" + trim(out)))
+
+  - id: count
+    desc: 返回成功登录总数与各用户登录次数
+    script: |
+      total = cmd("last -F 2>/dev/null | grep -v '^$' | head -100 | grep -v -E 'reboot|shutdown|wtmp' | wc -l")
+      uniq = cmd("last -w 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -rn | head -8")
+      ret("登录总次数(约): " + trim(total) + "\n按用户:\n" + trim(uniq))

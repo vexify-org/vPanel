@@ -1,0 +1,35 @@
+# vPanel 插件：Swap 管理
+name: swap_info
+version: 1.0.0
+desc: 查看 Swap 使用情况，支持创建 / 关闭 swap 文件
+url: plugins/swap_info.yml
+
+tools:
+  - id: status
+    desc: 查看当前 Swap 总量与已用量
+    script: |
+      out = cmd("free -h | grep Swap")
+      ret("" + trim(out))
+
+  - id: create
+    desc: 创建 swap 文件：输入大小(GB, 默认2)，启用并写入 fstab
+    params:
+      - id: size_gb
+        name: 大小(GB)
+        type: number
+        required: false
+        default: "2"
+    script: |
+      g = atoi(arg("size_gb"))
+      if g < 1
+        g = 2
+      end
+      out = cmd("fallocate -l " + itoa(g) + "G /swapfile 2>/dev/null && chmod 600 /swapfile && mkswap /swapfile >/dev/null 2>&1 && swapon /swapfile >/dev/null 2>&1 && echo 已启用 || echo 失败")
+      cmd("grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab")
+      ret("创建 " + itoa(g) + "G swap：" + trim(out))
+
+  - id: off
+    desc: 关闭并删除 swap（需 root）
+    script: |
+      out = cmd("swapoff /swapfile 2>/dev/null && rm -f /swapfile && echo 已关闭 || echo 失败")
+      ret("" + trim(out))

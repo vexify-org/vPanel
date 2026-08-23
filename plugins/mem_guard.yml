@@ -1,0 +1,54 @@
+# vPanel 插件：内存守卫
+name: mem_guard
+version: 1.0.0
+desc: 内存守卫：查看内存占用概览，超阈值时告警并列出占用最高的进程（含定时任务）
+url: plugins/mem_guard.yml
+
+tools:
+  - id: status
+    desc: 查看当前内存占用概览（总量/已用/可用 + 占用最高的 4 个进程）
+    script: |
+      m = cmd("free -m | awk 'NR==2{print \"总:\"$2\"MB 已用:\"$3\"MB 可用:\"$7\"MB\"}'")
+      p = cmd("ps -eo pid,rss,comm --sort=-rss | head -5 | tail -4 | awk '{printf \"%s %sKB %s\\n\", $1, $2, $3}'")
+      ret(json("mem=" + trim(m) + "; top=" + trim(p)))
+
+  - id: warn
+    desc: 检查内存使用率是否超过阈值(默认90%)，超限则返回占用前 4 的进程并记录告警次数
+    params:
+      - id: threshold
+        name: 阈值(%)
+        type: number
+        required: false
+        default: "90"
+        desc: 触发告警的内存使用率上限(1-100)
+    script: |
+      t = atoi(arg("threshold"))
+      if t < 1 || t > 100
+        t = 90
+      end
+      mem = cmd("free | awk 'NR==2{printf \"%.0f\", $3/$2*100}'")
+      used = atoi(trim(mem))
+      if used > t
+        top = cmd("ps -eo pid,rss,comm --sort=-rss | head -5 | tail -4")
+        n = atoi(kv_get("mem_warn_count")) + 1
+        kv_set("mem_warn_count", itoa(n))
+        ret("警告：内存占用 " + itoa(used) + "% 超过阈值 " + itoa(t) + "%（已告警 " + itoa(n) + " 次）\n" + top)
+      else
+        ret("内存正常：" + itoa(used) + "%（阈值 " + itoa(t) + "%）")
+      end
+
+tasks:
+  - id: watch
+    every: 60
+    desc: 每分钟检查一次内存，超 90% 记录告警
+    script: |
+      mem = cmd("free | awk 'NR==2{printf \"%.0f\", $3/$2*100}'")
+      used = atoi(trim(mem))
+      if used > 90
+        log("内存告警 " + itoa(used) + "%")
+      end
+
+hooks:
+  - event: on_init
+    script: |
+      log("插件 mem_guard 已加载")

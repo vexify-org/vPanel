@@ -1,0 +1,22 @@
+# vPanel 插件：内存高占用进程
+name: top_ram
+version: 1.0.0
+desc: 按内存列出占用最高的进程
+url: plugins/top_ram.yml
+
+tools:
+  - id: list
+    desc: 返回内存占用最高的 N 个进程（默认 10）
+    params:
+      - id: n
+        name: 数量
+        type: number
+        required: false
+        default: "10"
+    script: |
+      nn = atoi(arg("n"))
+      if nn < 1
+        nn = 10
+      end
+      out = cmd("ps -eo pid,rss,comm --sort=-rss | head -n " + itoa(nn + 1) + " | awk '{printf \"PID=%s RSS=%sKB %s\\n\", $1, $2, $3}'")
+      ret(json("" + trim(out)))

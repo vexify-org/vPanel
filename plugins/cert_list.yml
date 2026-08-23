@@ -1,0 +1,27 @@
+# vPanel 插件：Let's Encrypt 证书
+name: cert_list
+version: 1.0.0
+desc: 列出本机 Let's Encrypt / certbot 签发的证书与到期时间
+url: plugins/cert_list.yml
+
+tools:
+  - id: list
+    desc: 返回 certbot 管理的证书列表
+    script: |
+      ok = cmd("command -v certbot >/dev/null 2>&1 && echo yes || echo no")
+      if trim(ok) == "no"
+        ret("未安装 certbot，但尝试读取 /etc/letsencrypt/live 目录")
+      else
+        out = cmd("certbot certificates 2>/dev/null")
+        ret("" + trim(out))
+      end
+
+  - id: live
+    desc: 返回 /etc/letsencrypt/live 下已签发的域名目录
+    script: |
+      out = cmd("ls /etc/letsencrypt/live/ 2>/dev/null")
+      if trim(out) == ""
+        ret("未找到 /etc/letsencrypt/live 目录")
+      else
+        ret("" + trim(out))
+      end

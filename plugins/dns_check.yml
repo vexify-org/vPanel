@@ -1,0 +1,27 @@
+# vPanel 插件：DNS 解析测试
+name: dns_check
+version: 1.0.0
+desc: 测试指定域名 / 常用 DNS 的解析结果
+url: plugins/dns_check.yml
+
+tools:
+  - id: resolve
+    desc: 解析指定域名：输入 domain，返回 IP 与耗时
+    params:
+      - id: domain
+        name: 域名
+        type: string
+        required: true
+    script: |
+      d = arg("domain")
+      if d == ""
+        d = "example.com"
+      end
+      out = cmd("nslookup -timeout=5 '" + d + "' 2>&1 | grep -A1 'Address' | head -6")
+      ret(json("" + trim(out)))
+
+  - id: current_dns
+    desc: 返回当前系统配置的 DNS 服务器
+    script: |
+      out = cmd("cat /etc/resolv.conf 2>/dev/null | grep nameserver")
+      ret(json("" + trim(out)))

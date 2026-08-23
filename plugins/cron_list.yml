@@ -1,0 +1,18 @@
+# vPanel 插件：定时任务查看
+name: cron_list
+version: 1.0.0
+desc: 列出当前用户的 crontab 与系统定时任务
+url: plugins/cron_list.yml
+
+tools:
+  - id: user
+    desc: 返回 root 用户的 crontab 内容
+    script: |
+      out = cmd("crontab -l -u root 2>&1")
+      ret("" + trim(out))
+
+  - id: system
+    desc: 返回 /etc/crontab 与 /etc/cron.* 下的任务
+    script: |
+      out = cmd("cat /etc/crontab 2>/dev/null; echo ---; ls /etc/cron.d/ 2>/dev/null; echo ---; ls /etc/cron.hourly /etc/cron.daily 2>/dev/null")
+      ret(json("" + trim(out)))

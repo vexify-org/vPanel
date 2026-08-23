@@ -1,0 +1,22 @@
+# vPanel 插件：系统信息
+name: os_info
+version: 1.0.0
+desc: 查看操作系统 / 内核版本 / 架构 / 厂商
+url: plugins/os_info.yml
+
+tools:
+  - id: info
+    desc: 返回 OS 名称、版本、内核、架构
+    script: |
+      os = cmd("head -1 /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '\"'")
+      ver = cmd("grep -w VERSION_ID /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '\"'")
+      kv = cmd("uname -r")
+      arch = cmd("uname -m")
+      host = cmd("hostname")
+      ret(json("OS: " + trim(os) + " 版本: " + trim(ver) + "\n内核: " + trim(kv) + " 架构: " + trim(arch) + "\n主机名: " + trim(host)))
+
+  - id: glibc
+    desc: 返回 glibc / libc 版本（排障动态链接问题用）
+    script: |
+      out = cmd("ldd --version 2>&1 | head -1")
+      ret("" + trim(out))

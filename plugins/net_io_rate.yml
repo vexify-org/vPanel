@@ -1,0 +1,15 @@
+# vPanel 插件：实时网络速率
+name: net_io_rate
+version: 1.0.0
+desc: 采样网卡收发速率（KB/s），定位带宽占用
+url: plugins/net_io_rate.yml
+
+tools:
+  - id: sample
+    desc: 返回各网卡实时 下行/上行 速率（采样 1s，行数与网卡数一致）
+    script: |
+      out = cmd("ifstat -t -i all 1 1 2>/dev/null | tail -n +4")
+      if trim(out) == ""
+        out = cmd("grep -E 'eth0|ens[0-9]|enp[0-9]' /proc/net/dev | awk '{print $1\" 收:\"$2/1024\"KB 发:\"$10/1024\"KB累计\"}'")
+      end
+      ret(json("" + trim(out)))

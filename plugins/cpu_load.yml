@@ -1,0 +1,38 @@
+# vPanel 插件：CPU 负载
+name: cpu_load
+version: 1.0.0
+desc: 查看 CPU 使用率 / 负载与核心数，并用 KV 记录历史峰值
+url: plugins/cpu_load.yml
+
+tools:
+  - id: info
+    desc: 查看 CPU 占用率、1/5/15 分钟负载与核心数（top 式采样约 0.5s）
+    script: |
+      load = cmd("uptime | awk -F'load average:' '{print $2}'")
+      cores = cmd("nproc")
+      us = cmd("top -bn1 | grep '%Cpu' | head -1")
+      ret(json("cores=" + trim(cores) + ";" + " load=" + trim(load) + ";" + " " + trim(us)))
+
+  - id: peak
+    desc: 返回历史记录过的最高 CPU 使用率（kv 记录）
+    script: |
+      now = cmd("top -bn1 | grep '%Cpu' | sed -n 's/.*ni, *\\([0-9.]*\\) *us.*/\\1/p'")
+      cur = atoi(round(atoi(trim(now))))
+      pk = atoi(kv_get("cpu_peak"))
+      if cur > pk
+        pk = cur
+        kv_set("cpu_peak", itoa(pk))
+      end
+      ret("当前 " + itoa(cur) + "%  历史峰值 " + itoa(pk) + "%")
+
+tasks:
+  - id: sample
+    every: 30
+    desc: 每 30 秒采样一次，刷新历史峰值
+    script: |
+      now = cmd("top -bn1 | grep '%Cpu' | sed -n 's/.*ni, *\\([0-9.]*\\) *us.*/\\1/p'")
+      cur = atoi(round(atoi(trim(now))))
+      pk = atoi(kv_get("cpu_peak"))
+      if cur > pk
+        kv_set("cpu_peak", itoa(cur))
+      end

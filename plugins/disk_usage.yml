@@ -1,0 +1,15 @@
+# vPanel 插件：磁盘分区概览
+name: disk_usage
+version: 1.0.0
+desc: 查看各挂载分区容量、已用 / 使用率
+url: plugins/disk_usage.yml
+
+tools:
+  - id: list
+    desc: 列出所有分区的 容量 / 已用 / 可用 / 使用率 / 挂载点
+    script: |
+      out = cmd("df -h | grep -E '^/|^ /' | head -20")
+      if trim(out) == ""
+        out = cmd("df -h")
+      end
+      ret(json("" + trim(out)))

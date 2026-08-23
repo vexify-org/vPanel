@@ -1,0 +1,26 @@
+# vPanel 插件：网卡与 IP
+name: eth_info
+version: 1.0.0
+desc: 查看各网卡 IP、MAC、子网与链路状态
+url: plugins/eth_info.yml
+
+tools:
+  - id: list
+    desc: 返回所有有 IP 的网卡：接口 / IP / 状态
+    script: |
+      list = cmd("ip -o addr show | awk '$4 ~ /^[0-9]+\\\\./ {print $2, $4}'")
+      state = cmd("ip -o link show | awk '{print $2, $9}'")
+      ret(json("IP:\n" + trim(list) + "\n状态:\n" + trim(state)))
+
+  - id: public_ip
+    desc: 查询本机公网出口 IP（通过 API 探测，失败则提示）
+    script: |
+      p = cmd("curl -s --max-time 6 ifconfig.me 2>/dev/null")
+      if trim(p) == ""
+        p = cmd("curl -s --max-time 6 https://api.ipify.org 2>/dev/null")
+      end
+      if trim(p) == ""
+        ret("无法获取公网 IP（无外网访问或 curl 不可用）")
+      else
+        ret("公网 IP：" + trim(p))
+      end

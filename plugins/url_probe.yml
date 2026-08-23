@@ -1,0 +1,27 @@
+# vPanel 插件：URL 探测
+name: url_probe
+version: 1.0.0
+desc: 探测指定 URL 的 HTTP 状态码与耗时，判断站点是否可用
+url: plugins/url_probe.yml
+
+tools:
+  - id: probe
+    desc: 探测 URL：输入 url，返回 HTTP 状态码、总耗时
+    params:
+      - id: url
+        name: URL
+        type: string
+        required: true
+        desc: 例如 https://example.com
+    script: |
+      u = arg("url")
+      if u == ""
+        ret("请提供 url 参数")
+      else
+        out = cmd("curl -s -o /dev/null -m 8 -w '状态=%{http_code} 耗时=%{time_total}s' '" + u + "' 2>/dev/null")
+        if trim(out) == ""
+          ret("探测失败：" + u + "（网络不可达或超时）")
+        else
+          ret("" + trim(out))
+        end
+      end

@@ -1,0 +1,28 @@
+# vPanel 插件：失败登录统计
+name: failed_login
+version: 1.0.0
+desc: 统计 SSH 失败登录尝试，定位爆破来源 IP
+url: plugins/failed_login.yml
+
+tools:
+  - id: top_ip
+    desc: 返回失败登录次数最多的来源 IP Top8
+    script: |
+      out = cmd("grep -h 'Failed password' /var/log/auth.log 2>/dev/null | awk '{print $(NF-3)}' | grep -oE '([0-9]+\\\\.){3}[0-9]+' | sort | uniq -c | sort -rn | head -8")
+      if trim(out) == ""
+        out = cmd("journalctl -n 20000 2>/dev/null | grep 'Failed password' | grep -oE '([0-9]+\\\\.){3}[0-9]+' | sort | uniq -c | sort -rn | head -8")
+      end
+      if trim(out) == ""
+        ret("无失败登录记录或缺少日志权限")
+      else
+        ret("" + trim(out))
+      end
+
+  - id: count
+    desc: 返回最近失败登录总次数
+    script: |
+      c = cmd("grep -h 'Failed password' /var/log/auth.log 2>/dev/null | wc -l")
+      if trim(c) == ""
+        c = "0"
+      end
+      ret("失败登录次数：" + trim(c))

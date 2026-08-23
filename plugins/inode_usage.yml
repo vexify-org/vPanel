@@ -1,0 +1,22 @@
+# vPanel 插件：inode 使用率
+name: inode_usage
+version: 1.0.0
+desc: 查看各分区 inode 使用率（inode 耗尽会导致无法创建文件）
+url: plugins/inode_usage.yml
+
+tools:
+  - id: check
+    desc: 列出各分区 inode 总数 / 已用 / 使用率
+    script: |
+      out = cmd("df -ih | grep -vE '^Filesystem|tmpfs|overlay' | head -15")
+      ret(json("" + trim(out)))
+
+  - id: risk
+    desc: 返回 inode 使用率超过 80% 的分区警告
+    script: |
+      out = cmd("df -ih | awk 'NR>1 && $5 ~ /%$/ {gsub(/%$/,\"\",$5); if ($5+0 >= 80) print $6\" 使用率\"$5\"%\"}'")
+      if trim(out) == ""
+        ret("各分区 inode 使用正常")
+      else
+        ret("警告：" + trim(out))
+      end

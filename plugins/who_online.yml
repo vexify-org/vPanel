@@ -1,0 +1,22 @@
+# vPanel 插件：在线用户
+name: who_online
+version: 1.0.0
+desc: 查看当前在线登录用户与来源
+url: plugins/who_online.yml
+
+tools:
+  - id: list
+    desc: 返回当前在线用户：用户名 / 终端 / 来源IP / 登录时间
+    script: |
+      out = cmd("who -u 2>/dev/null | head -20")
+      if trim(out) == ""
+        out = cmd("who")
+      end
+      ret(json("" + trim(out)))
+
+  - id: sessions
+    desc: 返回所有 login 会话（含 root 会话数统计）
+    script: |
+      cnt = cmd("who | wc -l")
+      roots = cmd("who | grep -c '^root'")
+      ret("当前会话 " + trim(cnt) + " 个，其中 root " + trim(roots) + " 个")

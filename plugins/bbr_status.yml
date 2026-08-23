@@ -1,0 +1,25 @@
+# vPanel 插件：BBR 检查
+name: bbr_status
+version: 1.0.0
+desc: 检查当前是否启用 TCP BBR（网络优化），未启用则给出一键开启提示
+url: plugins/bbr_status.yml
+
+tools:
+  - id: check
+    desc: 返回当前 BBR 是否开启、拥塞算法、内核版本
+    script: |
+      algo = cmd("sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null")
+      off = cmd("sysctl -n net.core.default_qdisc 2>/dev/null")
+      kv = cmd("uname -r")
+      rt = cmd("lsmod | grep -i tcp_bbr >/dev/null 2>&1 && echo 已加载 || echo 未加载")
+      ret(json("拥塞算法: " + trim(algo) + " 队列: " + trim(off) + " 模块: " + trim(rt) + " 内核: " + trim(kv)))
+
+  - id: enable
+    desc: 尝试启用 BBR（内核≥4.9 才有效，需 root）
+    script: |
+      out = cmd("echo 'net.core.default_qdisc=fq' >> /etc/sysctl.conf 2>/dev/null; echo 'net.ipv4.tcp_congestion_control=bbr' >> /etc/sysctl.conf 2>/dev/null; sysctl -p >/dev/null 2>&1; sysctl -n net.ipv4.tcp_congestion_control")
+      if trim(out) == "bbr"
+        ret("BBR 已启用成功")
+      else
+        ret("启用失败（可能内核过低或无权限），当前算法：" + trim(out))
+      end

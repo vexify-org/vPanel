@@ -1,0 +1,26 @@
+# vPanel 插件：可更新软件包
+name: apt_updates
+version: 1.0.0
+desc: 统计 apt 可升级的软件包数量与内核相关更新
+url: plugins/apt_updates.yml
+
+tools:
+  - id: count
+    desc: 返回可升级软件包总数
+    script: |
+      cmd("apt-get update -qq >/dev/null 2>&1")
+      n = cmd("apt list --upgradable 2>/dev/null | grep -c '^[^L]'")
+      if trim(n) == ""
+        n = "0"
+      end
+      ret(json("可升级软件包: " + trim(n)))
+
+  - id: kernel
+    desc: 返回可更新的内核相关包
+    script: |
+      out = cmd("apt list --upgradable 2>/dev/null | grep -E 'linux-image|linux-headers' | head -10")
+      if trim(out) == ""
+        ret("内核已是最新")
+      else
+        ret(json("" + trim(out)))
+      end

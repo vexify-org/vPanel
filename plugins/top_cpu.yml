@@ -1,0 +1,22 @@
+# vPanel 插件：CPU 高占用进程
+name: top_cpu
+version: 1.0.0
+desc: 采样 0.5s，按 CPU 使用率列出占用最高的进程
+url: plugins/top_cpu.yml
+
+tools:
+  - id: list
+    desc: 返回 CPU 占用最高的 N 个进程（默认 10，top 采样约 0.5s）
+    params:
+      - id: n
+        name: 数量
+        type: number
+        required: false
+        default: "10"
+    script: |
+      nn = atoi(arg("n"))
+      if nn < 1
+        nn = 10
+      end
+      out = cmd("top -bn2 -d 0.25 | grep -E '^[ ]*[0-9]+' | awk '{printf \"%s %s %s\\n\", $9, $1, $12}' | sort -t' ' -k1 -rn | head -n " + itoa(nn))
+      ret(json("" + trim(out)))

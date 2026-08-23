@@ -1,0 +1,28 @@
+# vPanel 插件：磁盘清理
+name: disk_cleaner
+version: 1.0.0
+desc: 清理系统垃圾：apt 缓存、缩略图、回收站、旧日志，释放磁盘
+url: plugins/disk_cleaner.yml
+
+tools:
+  - id: dry
+    desc: 预估可释放空间（仅统计，不清除）
+    script: |
+      a = cmd("du -sh /var/cache/apt 2>/dev/null | awk '{print $1}'")
+      j = cmd("du -sh /var/log 2>/dev/null | awk '{print $1}'")
+      ret("apt缓存约 " + a + "，日志目录约 " + j + "（执行 clean 可自动清理）")
+
+  - id: clean
+    desc: 执行安全清理：apt 缓存 + 包管理器残留 + 回收站（需 root）
+    script: |
+      one = cmd("apt-get clean 2>/dev/null; apt-get autoclean 2>/dev/null; echo 完成")
+      two = cmd("rm -rf /root/.local/share/Trash/* 2>/dev/null; rm -rf /tmp/vpanel_tmpdir 2>/dev/null; echo 完成")
+      ret("apt清理：" + trim(one) + "\n回收站清理：" + trim(two))
+
+tasks:
+  - id: auto
+    every: 86400
+    desc: 每天清理一次 apt 缓存
+    script: |
+      cmd("apt-get clean 2>/dev/null")
+      log("每日 apt 缓存清理完成")

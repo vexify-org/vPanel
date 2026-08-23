@@ -1,0 +1,33 @@
+# vPanel 插件：大日志 & 截断
+name: truncate_logs
+version: 1.0.0
+desc: 找出占用空间大的日志文件，支持安全截断
+url: plugins/truncate_logs.yml
+
+tools:
+  - id: find
+    desc: 返回 /var/log 下超过 20MB 的日志文件
+    script: |
+      out = cmd("find /var/log -type f -size +20M 2>/dev/null | xargs -r du -sh | sort -rh | head -10")
+      if trim(out) == ""
+        ret("没有超过 20MB 的日志文件")
+      else
+        ret(json("" + trim(out)))
+      end
+
+  - id: truncate
+    desc: 截断指定日志文件（清空但保留文件），输入 path 如 /var/log/syslog
+    params:
+      - id: path
+        name: 日志路径
+        type: string
+        required: true
+    script: |
+      p = arg("path")
+      if p == ""
+        ret("请提供 path")
+      else
+        out = cmd("truncate -s 0 '" + p + "' 2>&1 && echo 完成 || echo 失败(无权限或不存在)")
+        cmd("journalctl --vacuum-size=50M >/dev/null 2>&1")
+        ret("截断 " + p + "：" + trim(out))
+      end

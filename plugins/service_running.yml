@@ -1,0 +1,22 @@
+# vPanel 插件：运行中服务
+name: service_running
+version: 1.0.0
+desc: 列出正在运行的服务及异常退出状态的服务
+url: plugins/service_running.yml
+
+tools:
+  - id: active
+    desc: 返回所有处于 active(running) 的系统服务
+    script: |
+      out = cmd("systemctl list-units --type=service --state=running --no-legend --no-pager 2>/dev/null | head -40")
+      ret(json("" + trim(out)))
+
+  - id: failed
+    desc: 返回启动失败(异常)的服务
+    script: |
+      out = cmd("systemctl list-units --type=service --state=failed --no-legend --no-pager 2>/dev/null")
+      if trim(out) == ""
+        ret("没有失败的服务 ✓")
+      else
+        ret("" + trim(out))
+      end

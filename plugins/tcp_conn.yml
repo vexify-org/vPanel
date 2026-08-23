@@ -1,0 +1,21 @@
+# vPanel 插件：TCP 连接统计
+name: tcp_conn
+version: 1.0.0
+desc: 统计当前 TCP 连接数、状态分布与各外部 IP 连接数
+url: plugins/tcp_conn.yml
+
+tools:
+  - id: states
+    desc: 返回各 TCP 状态连接数量分布
+    script: |
+      out = cmd("ss -tan 2>/dev/null | awk 'NR>1{print $1}' | sort | uniq -c | sort -rn")
+      if trim(out) == ""
+        out = cmd("netstat -tan 2>/dev/null | awk 'NR>2{print $6}' | sort | uniq -c | sort -rn")
+      end
+      ret(json("" + trim(out)))
+
+  - id: top_remote
+    desc: 返回与本机建立连接最多的外部 IP Top10（存在异常量大时提示攻击）
+    script: |
+      out = cmd("ss -tan 2>/dev/null | awk 'NR>1{print $5}' | grep -v '127.0.0.1' | sed 's/:[0-9]*$//' | sort | uniq -c | sort -rn | head -10")
+      ret(json("" + trim(out)))

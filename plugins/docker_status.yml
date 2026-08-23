@@ -1,0 +1,19 @@
+# vPanel 插件：Docker 状态
+name: docker_status
+version: 1.0.0
+desc: 查看 Docker 容器/镜像/磁盘占用概览
+url: plugins/docker_status.yml
+
+tools:
+  - id: info
+    desc: 返回 Docker 容器数量、运行状态与镜像数（未安装则提示）
+    script: |
+      ok = cmd("command -v docker >/dev/null 2>&1 && echo yes || echo no")
+      if trim(ok) == "no"
+        ret("未检测到 Docker（未安装或未加入 docker 组）")
+      else
+        ps = cmd("docker ps --format '{{.Names}}\\t{{.Status}}' 2>/dev/null")
+        imgs = cmd("docker images 2>/dev/null | wc -l")
+        size = cmd("du -sh /var/lib/docker 2>/dev/null | awk '{print $1}'")
+        ret(json("容器:\n" + trim(ps) + "\n镜像数(含头): " + trim(imgs) + "\n数据占用: " + trim(size)))
+      end

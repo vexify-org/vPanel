@@ -1,0 +1,33 @@
+# vPanel 插件：目录占用 Top
+name: disk_top
+version: 1.0.0
+desc: 扫描指定目录一级子项占用，返回 Top N（du 统计）
+url: plugins/disk_top.yml
+
+tools:
+  - id: scan
+    desc: 扫描目录占用：输入 path（默认 /）与 n（默认 10），返回降序 Top N
+    params:
+      - id: path
+        name: 目录
+        type: string
+        required: false
+        default: "/"
+        desc: 要扫描的目录
+      - id: n
+        name: 数量
+        type: number
+        required: false
+        default: "10"
+        desc: 返回的条目数
+    script: |
+      p = arg("path")
+      if p == ""
+        p = "/"
+      end
+      nn = atoi(arg("n"))
+      if nn < 1
+        nn = 10
+      end
+      out = cmd("du -xh --max-depth=1 '" + p + "' 2>/dev/null | sort -rh | head -n " + itoa(nn))
+      ret(json("" + trim(out)))

@@ -1,0 +1,20 @@
+# vPanel 插件：SSH 加固检查
+name: ssh_hardening
+version: 1.0.0
+desc: 检查 SSH 安全配置与薄弱项，给出加固建议
+url: plugins/ssh_hardening.yml
+
+tools:
+  - id: check
+    desc: 检查 root 登录、密码登录、SSH 端口等关键配置
+    script: |
+      p = cmd("sshd -T 2>/dev/null | grep -E '^(permitrootlogin|passwordauthentication|port) '")
+      if trim(p) == ""
+        p = cmd("grep -E '^#?PermitRootLogin|^#?PasswordAuthentication|^#?Port' /etc/ssh/sshd_config 2>/dev/null")
+      end
+      ret(json("" + trim(p)))
+
+  - id: suggest
+    desc: 返回常见加固建议
+    script: |
+      ret(json("建议:\n1. 禁止 root 直接登录 (PermitRootLogin no)\n2. 关闭密码登录, 改用密钥 (PasswordAuthentication no)\n3. 修改默认22端口\n4. 设置登录失败锁定 (fail2ban)"))

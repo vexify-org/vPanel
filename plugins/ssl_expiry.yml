@@ -1,0 +1,26 @@
+# vPanel 插件：SSL 证书到期
+name: ssl_expiry
+version: 1.0.0
+desc: 查看站点 SSL 证书剩余天数与签发信息
+url: plugins/ssl_expiry.yml
+
+tools:
+  - id: check
+    desc: 检查证书：输入 domain，返回剩余天数与到期时间
+    params:
+      - id: domain
+        name: 域名
+        type: string
+        required: true
+    script: |
+      d = arg("domain")
+      if d == ""
+        ret("请提供 domain")
+      else
+        out = cmd("echo | timeout 8 openssl s_client -servername '" + d + "' -connect '" + d + ":443' 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null")
+        if trim(out) == ""
+          ret("无法获取 " + d + " 的证书（端口或域名不通）")
+        else
+          ret("" + trim(out))
+        end
+      end

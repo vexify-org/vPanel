@@ -1,0 +1,15 @@
+# vPanel 插件：监听端口
+name: port_listen
+version: 1.0.0
+desc: 列出当前正在监听（LISTEN）的端口与其对应服务/进程
+url: plugins/port_listen.yml
+
+tools:
+  - id: list
+    desc: 返回所有 LISTEN 端口：端口号 + 进程名(如有)
+    script: |
+      out = cmd("ss -ltnp 2>/dev/null | grep -v '^State' | sed -n '1,50p'")
+      if trim(out) == ""
+        out = cmd("netstat -ltnp 2>/dev/null | sed -n '3,50p'")
+      end
+      ret(json("" + trim(out)))
