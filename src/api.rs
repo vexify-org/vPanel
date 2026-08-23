@@ -19,6 +19,19 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
         "/api/plugin/kv" => state.plugins.kv_list_json(),
         "/api/info" => crate::extra::sysinfo_json(),
         "/api/conns" => crate::extra::conns_json(),
+        "/api/autostart" => crate::nginx::autostart_json(),
+        "/api/nginx" => crate::nginx::nginx_list_json(),
+        "/api/disk/top" => {
+            let q = question_query(qs);
+            let path = q_get(&q, "path").unwrap_or("/").to_string();
+            let n: usize = q_get(&q, "n").and_then(|x| x.parse().ok()).unwrap_or(20);
+            crate::extra::disk_top_json(&path, n)
+        }
+        "/api/top" => {
+            let q = question_query(qs);
+            let n: usize = q_get(&q, "n").and_then(|x| x.parse().ok()).unwrap_or(20);
+            crate::extra::resources_top_json(n)
+        }
         "/api/files" => {
             let q = question_query(qs);
             let path = q_get(&q, "path").map(str::to_string).unwrap_or_else(|| "/".to_string());
@@ -219,6 +232,38 @@ fn action_route(target: &str, body: &[u8], _qs: &str) -> String {
                 return err("文件过大（上限 8MB）");
             }
             let (ok, msg) = crate::extra::write_file(&path, body);
+            ok_bool(ok, msg)
+        }
+        "/api/nginx/add" => {
+            let fname = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            let server_name = json::form_get(&fields, "server_name").unwrap_or("").trim().to_string();
+            let listen = json::form_get(&fields, "listen").unwrap_or("80").trim().to_string();
+            let target = json::form_get(&fields, "target").unwrap_or("").trim().to_string();
+            let (ok, msg) = crate::nginx::nginx_add(&fname, &server_name, &listen, &target);
+            ok_bool(ok, msg)
+        }
+        "/api/nginx/toggle" => {
+            let fname = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            let enable = json::form_get(&fields, "enable").unwrap_or("").trim() == "true" || json::form_get(&fields, "enable").unwrap_or("").trim() == "1";
+            let (ok, msg) = crate::nginx::nginx_toggle(&fname, enable);
+            ok_bool(ok, msg)
+        }
+        "/api/nginx/delete" => {
+            let fname = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            let (ok, msg) = crate::nginx::nginx_delete(&fname);
+            ok_bool(ok, msg)
+        }
+        "/api/nginx/reload" => {
+            let (ok, msg) = crate::nginx::nginx_reload_endpoint();
+            ok_bool(ok, msg)
+        }
+        "/api/autostart" => {
+            let name = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            let enable = json::form_get(&fields, "enable").unwrap_or("").trim() == "true" || json::form_get(&fields, "enable").unwrap_or("").trim() == "1";
+            if name.is_empty() {
+                return err("缺少 name");
+            }
+            let (ok, msg) = crate::nginx::autostart_action(&name, enable);
             ok_bool(ok, msg)
         }
         "/api/process/kill" => {

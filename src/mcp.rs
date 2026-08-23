@@ -47,7 +47,7 @@ fn fmt_jsonrpc(id: Option<i64>, payload: String, is_error: bool) -> String {
 }
 
 fn init_resp(id: Option<i64>) -> String {
-    let result = "{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"vpanel\",\"version\":\"1.0.0\"}}";
+    let result = "{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"vpanel\",\"version\":\"1.3.0\"}}";
     fmt_jsonrpc(
         id,
         result.to_string(),
@@ -69,6 +69,19 @@ fn tools_list(id: Option<i64>, state: &State) -> String {
         ("firewall_del","删除端口放行","{\"port\":{\"type\":\"string\"}}"),
         ("list_tasks","列出定时任务","{}"),
         ("task_add","添加定时任务，参数 schedule(5段cron) 与 command","{\"schedule\":{\"type\":\"string\"},\"command\":{\"type\":\"string\"}}"),
+        ("system_info","查看系统信息：OS/内核/CPU型号/内存/磁盘分区/温度","{}"),
+        ("list_conns","列出网络连接（TCP），含本地/远端地址与进程","{}"),
+        ("kill_conn","结束占用某端口的连接","{\"port\":{\"type\":\"string\"}}"),
+        ("list_files","列出目录文件（轻量，name/type/size/human）","{\"path\":{\"type\":\"string\"}}"),
+        ("read_file","读取文本文件内容（按需读取）","{\"path\":{\"type\":\"string\"}}"),
+        ("delete_path","删除文件或空目录","{\"path\":{\"type\":\"string\"}}"),
+        ("write_file","写入文本文件（覆盖）","{\"path\":{\"type\":\"string\"},\"content\":{\"type\":\"string\"}}"),
+        ("log_tail","查看文件尾部 n 行日志","{\"file\":{\"type\":\"string\"},\"n\":{\"type\":\"number\"}}"),
+        ("disk_top","磁盘占用排行：扫描目录一级子目录占用，参数 path 与 n","{\"path\":{\"type\":\"string\"},\"n\":{\"type\":\"number\"}}"),
+        ("list_nginx","列出反向代理/Nginx 站点","{}"),
+        ("nginx_add","新增反向代理站点，参数 name/server_name/listen/target","{\"name\":{\"type\":\"string\"},\"server_name\":{\"type\":\"string\"},\"listen\":{\"type\":\"string\"},\"target\":{\"type\":\"string\"}}"),
+        ("nginx_toggle","启用/停用反代站点，参数 name 与 enable(布尔)","{\"name\":{\"type\":\"string\"},\"enable\":{\"type\":\"boolean\"}}"),
+        ("nginx_delete","删除反代站点，参数 name","{\"name\":{\"type\":\"string\"}}"),
     ];
     let mut item = Vec::new();
     for (name, desc, schema) in tools {
@@ -132,6 +145,15 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
     let port = arg_str(&args, "port");
     let schedule = arg_str(&args, "schedule");
     let command = arg_str(&args, "command");
+    let path = arg_str(&args, "path");
+    let content = arg_str(&args, "content");
+    let file = arg_str(&args, "file");
+    let n: usize = arg_str(&args, "n").parse().unwrap_or(20);
+    let server_name = arg_str(&args, "server_name");
+    let listen = arg_str(&args, "listen");
+    let target = arg_str(&args, "target");
+    let fname = arg_str(&args, "name");
+    let enable = arg_str(&args, "enable") == "true" || arg_str(&args, "enable") == "1";
 
     let (ok, text) = match name.as_str() {
         "system_overview" => (true, crate::system::system_json(&state.monitor)),
@@ -156,6 +178,46 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
             Ok(p) => (crate::system::kill_pid(p), format!("请求结束进程 {}", p)),
             Err(_) => (false, "pid 需为数字".into()),
         },
+        "system_info" => (true, crate::extra::sysinfo_json()),
+        "list_conns" => (true, crate::extra::conns_json()),
+        "kill_conn" => {
+            let (o, m) = crate::extra::conn_kill(&port);
+            (o, m)
+        }
+        "list_files" => {
+            let p = if path.is_empty() { "/".to_string() } else { path.clone() };
+            (true, crate::extra::ls_json(&p))
+        }
+        "read_file" => (true, crate::extra::read_file_json(&path)),
+        "delete_path" => {
+            let (o, m) = crate::extra::del_path(&path);
+            (o, m)
+        }
+        "write_file" => {
+            let (o, m) = crate::extra::write_file(&path, content.as_bytes());
+            (o, m)
+        }
+        "log_tail" => {
+            let p = if file.is_empty() { "/var/log/syslog".to_string() } else { file.clone() };
+            (true, crate::extra::log_tail_json(&p, n))
+        }
+        "disk_top" => {
+            let p = if path.is_empty() { "/".to_string() } else { path.clone() };
+            (true, crate::extra::disk_top_json(&p, n))
+        }
+        "list_nginx" => (true, crate::nginx::nginx_list_json()),
+        "nginx_add" => {
+            let (o, m) = crate::nginx::nginx_add(&fname, &server_name, &listen, &target);
+            (o, m)
+        }
+        "nginx_toggle" => {
+            let (o, m) = crate::nginx::nginx_toggle(&fname, enable);
+            (o, m)
+        }
+        "nginx_delete" => {
+            let (o, m) = crate::nginx::nginx_delete(&fname);
+            (o, m)
+        }
         _ => plugin_or_unknown(state, name.as_str(), &args),
     };
     let result = format!(

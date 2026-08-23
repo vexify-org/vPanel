@@ -128,8 +128,8 @@ form.rowform{display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wr
 <div class="toast" id="toast"></div>
 <script>
 var ACCENT='__ACCENT__', SHELL_ON=__SHELL_ON__;
-var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务",shop:"软件商店",mcp:"AI 工具",plg:"插件",inf:"系统信息",net:"网络连接",log:"实时日志",fs:"文件管理"};
-var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["fw","安全"],["tk","定时"],["shop","商店"],["mcp","AI"],["plg","插件"],["inf","信息"],["net","连接"],["log","日志"],["fs","文件"]];
+var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务",shop:"软件商店",mcp:"AI 工具",plg:"插件",inf:"系统信息",net:"网络连接",log:"实时日志",fs:"文件管理",dk:"磁盘占用",rp:"反向代理",rs:"资源排行"};
+var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["fw","安全"],["tk","定时"],["shop","商店"],["mcp","AI"],["plg","插件"],["inf","信息"],["net","连接"],["log","日志"],["fs","文件"],["dk","磁盘"],["rp","反代"],["rs","资源"]];
 if(SHELL_ON)TABS.push(["term","终端"]);
 var cur="ov";
 
@@ -148,6 +148,7 @@ function choose(){window.clearInterval(window._iv);$('ttl').textContent=TITLES[c
   if(cur==='shop')loadShop(); if(cur==='mcp')loadMCP(); if(cur==='plg')loadPlug();
   if(cur==='inf')loadInf(); if(cur==='net'){loadNet();window._iv=setInterval(loadNet,3000)}
   if(cur==='log')loadLogCfg(); if(cur==='fs')loadFs('/');
+  if(cur==='dk')loadDk('/'); if(cur==='rp')loadRp(); if(cur==='rs'){loadRs();window._iv=setInterval(loadRs,5000)}
 }
 
 function chart(cid){return {id:cid,path:"",draw:function(arr,color,max){var v=$('svg#c'+cid);if(!v)return;var w=v.clientWidth||300,h=v.clientHeight||120,n=arr.length;if(!n)return;var pad=2;function px(arr){var t="";for(var i=0;i<n;i++){var x=pad+(i/(n-1))*(w-2*pad);var val=Math.min(arr[i]||0,max||100);var y=h-pad-(h-2*pad)*(val/(max||100));t+=(i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1)}return t}
@@ -457,6 +458,88 @@ function parentDir(p){var i=p.replace(/\/+$/,'').lastIndexOf('/');return i>0?p.s
 function fsSave(path){var data=$('fsed').value;post('/api/file/save',{path:path,data:data},function(res){toast(res&&res.msg||'已保存');loadFs(parentDir(path))})}
 function fsDel(path){if(!confirm('确定删除 '+path+' ？（目录会递归删除）'))return;post('/api/file/delete',{path:path},function(res){toast(res&&res.msg||'已删除');loadFs(parentDir(path))})}
 function fsDown(path){window.location='/api/file/download?path='+encodeURIComponent(path)}
+
+/* ---- 磁盘占用排行 ---- */
+function loadDk(path){
+  var h='<div class="card" style="padding:6px 18px 18px"><div class="l" style="padding-top:14px">磁盘占用排行（du）</div>'
+    +'<div class="toolbar" style="margin-top:8px"><input id="dkpath" list="dklist" value="'+(path==='/'?'/':path)+'" style="flex:1">'
+    +'<datalist id="dklist">'+['/','/root','/home','/var','/var/log','/usr','/opt','/data'].map(function(x){return '<option value="'+x+'">'}).join('')+'</datalist>'
+    +'<button class="pri" onclick="doDk()">扫描</button></div>'
+    +'<div class="muted" style="margin-top:6px">扫描该目录下第一级子目录占用大小（可能稍慢）。点击「去清理」跳转文件管理。</div></div>';
+  h+='<div class="card" style="margin-top:14px" id="dkres"><div class="l">Top 占用</div><table><tr><th>路径</th><th class="num">大小</th><th></th></tr><tr><td colspan="3" class="muted">扫描中…</td></tr></table></div>';
+  $('view').innerHTML=h;
+  if(path)doDk();
+}
+function doDk(){var p=$('dkpath').value.trim()||'/';scanDk(p)}
+function scanDk(path){
+  var el=$('dkres');if(el)el.innerHTML='<div class="l">Top 占用（'+esc(path)+'）</div><table><tr><th>路径</th><th class="num">大小</th><th></th></tr><tr><td colspan="3" class="muted">扫描中…（du 可能耗时）</td></tr></table>';
+  fetch('/api/disk/top?path='+encodeURIComponent(path)+'&n=25').then(function(r){return r.json()}).then(function(d){
+    if(!d.ok){(el||$('view')).innerHTML='<span class="hot">'+(d.msg||'扫描失败')+'</span>';return}
+    var h='<div class="l">Top 占用 · '+esc(path)+'</div><table><tr><th>路径</th><th class="num">大小</th><th></th></tr>';
+    (d.list||[]).forEach(function(x){h+='<tr><td>'+esc(x.path)+'</td><td class="num">'+x.human+'</td><td style="text-align:right"><button class="mini" onclick="goClean(\''+esc(x.path)+'\')">去清理</button></td></tr>'});
+    h+='</table>'+muted((d.list||[]).length+' 条');
+    el.innerHTML=h;
+  }).catch(function(){el.innerHTML='<span class="hot">扫描失败（du 异常）</span>'});
+}
+function goClean(p){cur='fs';renderTabs();loadFs(p)}
+
+/* ---- 反向代理 / Nginx 站点 ---- */
+function loadRp(){
+  var h='<div class="card" style="padding:6px 18px 18px"><div class="l" style="padding-top:14px">反向代理 / Nginx 站点</div>'
+    +'<div class="muted" style="line-height:1.8">管理 /etc/nginx 的 sites-available + sites-enabled（符号链接启用）。新增站点会先 <code>nginx -t</code> 校验，失败自动回滚。</div></div>'
+    +'<div class="card" style="margin-top:14px"><div class="l">新增反代站点</div>'
+    +'<form class="rowform" style="flex-wrap:wrap" onsubmit="rpAdd(event)">'
+    +'<label style="min-width:90px">站点名 *<input name="name" style="flex:1" placeholder="myapp"></label>'
+    +'<label style="min-width:90px">域名 *<input name="server_name" style="flex:1" placeholder="app.example.com"></label>'
+    +'<label style="min-width:90px">端口 <input name="listen" style="flex:1" value="80"></label>'
+    +'<label style="min-width:180px">代理到 *<input name="target" style="flex:1" placeholder="http://127.0.0.1:3000"></label>'
+    +'<button class="pri" type="submit">创建并启用</button></form></div>'
+    +'<div class="toolbar" style="margin-top:10px"><button class="mini" onclick="rpReload()">nginx reload</button> <button class="mini" onclick="loadRp()">刷新</button></div>';
+  h+='<div class="card" style="margin-top:14px" id="rpres"><div class="l">已配置站点</div><table><tr><th>站点</th><th>监听</th><th>域名</th><th>代理到</th><th>状态</th><th></th></tr><tr><td colspan="6" class="muted">加载中…</td></tr></table></div>';
+  $('view').innerHTML=h;
+  fetch('/api/nginx').then(function(r){return r.json()}).then(function(d){
+    var el=$('rpres');if(!d.ok){el.innerHTML='<span class="hot">'+d.msg+'</span>';return}
+    var t='<div class="l">已配置站点 <span class="muted">('+esc(d.basedir)+')</span></div><table><tr><th>站点</th><th>监听</th><th>域名</th><th>代理到</th><th>状态</th><th></th></tr>';
+    (d.list||[]).forEach(function(s){
+      t+='<tr><td><b>'+esc(s.name)+'</b></td><td class="num">'+esc(s.listen||'—')+'</td><td>'+esc(s.server_name||'—')+'</td><td class="muted">'+esc(s.proxy_pass||'—')+'</td>'
+       +'<td>'+(s.enabled?'<span class="cool">● 启用</span>':'<span class="warm">● 停用</span>')+'</td>'
+       +'<td style="text-align:right">'
+       +(s.enabled?'<button class="mini" onclick="rpToggle(\''+esc(s.name)+'\',false)">停用</button>':'<button class="mini ok" onclick="rpToggle(\''+esc(s.name)+'\',true)">启用</button>')
+       +' <button class="mini danger" onclick="rpDel(\''+esc(s.name)+'\')">删除</button>'
+       +'</td></tr>';
+    });
+    t+='</table>'+muted((d.list||[]).length+' 个站点');
+    el.innerHTML=t;
+  }).catch(function(){$('rpres').innerHTML='<span class="hot">无法连接 /api/nginx</span>'});
+}
+function rpAdd(e){e.preventDefault();var f=new FormData(e.target);var args={};f.forEach(function(v,k){args[k]=v});
+  post('/api/nginx/add',args,function(res){toast(res&&res.msg||'已处理');if(res&&res.ok)loadRp()});}
+function rpToggle(name,on){post('/api/nginx/toggle',{name:name,enable:(on?'true':'false')},function(res){toast(res&&res.msg||'已处理');loadRp()})}
+function rpDel(name){if(!confirm('确定删除站点 '+name+'？（会删除配置文件）'))return;post('/api/nginx/delete',{name:name},function(res){toast(res&&res.msg||'已处理');loadRp()})}
+function rpReload(){post('/api/nginx/reload',{},function(res){toast(res&&res.msg||'已 reload')})}
+
+/* ---- 资源实时排行 + 开机自启 ---- */
+function loadRs(){
+  var h='<div class="card"><div class="l">CPU / 内存实时排行 <span class="muted">(top 式，采样 0.7s，每 5s 刷新)</span></div>'
+    +'<div id="rsres"><table><tr><th class="num">CPU%</th><th>进程</th><th class="num">内存</th><th></th></tr><tr><td colspan="4" class="muted">采样中…</td></tr></table></div></div>';
+  h+='<div class="card" style="margin-top:14px"><div class="l">开机自启服务 <span class="muted">(systemctl enabled)</span></div><div id="rsauto"><table><tr><th>服务</th><th>状态</th><th></th></tr><tr><td colspan="3" class="muted">加载中…</td></tr></table></div></div>';
+  $('view').innerHTML=h;
+  fetch('/api/top?n=25').then(function(r){return r.json()}).then(function(d){
+    var t='<table><tr><th class="num">CPU%</th><th>进程</th><th class="num">内存</th><th></th></tr>';
+    (d.list||[]).forEach(function(p){
+      t+='<tr><td class="num">'+p.cpu+'%</td><td>'+esc(p.name)+' <span class="muted">(PID '+p.pid+')</span></td><td class="num">'+p.human+'</td><td style="text-align:right"><button class="mini danger" onclick="killP('+p.pid+')">结束</button></td></tr>'});
+    t+='</table>'+(d.list||[]).length?'':muted('无数据');
+    $('rsres').innerHTML=t;
+  }).catch(function(){$('rsres').innerHTML='<span class="hot">采样失败</span>'});
+  fetch('/api/autostart').then(function(r){return r.json()}).then(function(d){
+    var t='<table><tr><th>服务</th><th>状态</th><th></th></tr>';
+    (d.list||[]).forEach(function(s){
+      t+='<tr><td>'+esc(s.name)+'</td><td class="muted">'+esc(s.state)+'</td><td style="text-align:right"><button class="mini danger" onclick="autoSet(\''+esc(s.name)+'\',false)">关闭自启</button></td></tr>'});
+    t+='</table>'+(d.list||[]).length?'':muted('暂无可用的自启服务');
+    $('rsauto').innerHTML=t;
+  }).catch(function(){$('rsauto').innerHTML='<span class="hot">无法加载自启服务</span>'});
+}
+function autoSet(name,on){post('/api/autostart',{name:name,enable:(on?'true':'false')},function(res){toast(res&&res.msg||'已处理');loadRs()})}
 
 renderTabs();choose();
 </script>

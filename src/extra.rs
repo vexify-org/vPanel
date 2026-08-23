@@ -439,3 +439,141 @@ pub fn write_file(path: &str, bytes: &[u8]) -> (bool, String) {
 pub fn download(path: &str) -> Option<Vec<u8>> {
     std::fs::read(path).ok()
 }
+
+// ---------------------------------------------------------------------------
+// 5. 磁盘占用排行
+// ---------------------------------------------------------------------------
+
+/// du 扫描指定目录的一级子元素占用，降序返回 Top N -> JSON。
+/// 示例：/api/disk/top?path=/&n=20
+pub fn disk_top_json(path: &str, n: usize) -> String {
+    if !std::path::Path::new(path).is_dir() {
+        return format!("{{\"ok\":false,\"msg\":\"{} 不是目录\"}}", json::jesc(path));
+    }
+    let out = cmd_all(&format!("du -xk --max-depth=1 {} 2>/dev/null", path)).unwrap_or_default();
+    let mut items: Vec<(u64, String)> = Vec::new();
+    for line in out.lines() {
+        let mut it = line.split_whitespace();
+        let size = it.next().and_then(|x| x.parse::<u64>().ok()).unwrap_or(0);
+        let name: String = it.collect::<Vec<_>>().join(" ");
+        if name.is_empty() {
+            continue;
+        }
+        items.push((size.saturating_mul(1024), name));
+    }
+    items.sort_by(|a, b| b.0.cmp(&a.0));
+    items.truncate(n.max(1));
+    let arr: Vec<String> = items
+        .iter()
+        .map(|(s, nm)| {
+            format!(
+                "{{\"size\":{},\"path\":\"{}\",\"human\":\"{}\"}}",
+                s,
+                json::jesc(nm),
+                json::jesc(&human(*s))
+            )
+        })
+        .collect();
+    format!(
+        "{{\"ok\":true,\"path\":\"{}\",\"list\":[{}]}}",
+        json::jesc(path),
+        arr.join(",")
+    )
+}
+
+// ---------------------------------------------------------------------------
+// 6. 资源实时排行（CPU / 内存 Top）
+// ---------------------------------------------------------------------------
+
+/// top 式进程排行：采样 ~700ms 计算每进程 CPU%，按 CPU 倒序 -> JSON。
+pub fn resources_top_json(n: usize) -> String {
+    // 阶段一：收集候选进程（按 RSS 取舍），读一次 CPU 时间。
+    let mut cand: Vec<(u32, String, u64, u64)> = Vec::new(); // pid, comm, rss, utime+stime
+    if let Ok(rd) = std::fs::read_dir("/proc") {
+        for ent in rd.flatten() {
+            let pid: u32 = match ent.file_name().to_string_lossy().parse() {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+            let stat_p = format!("/proc/{}/stat", pid);
+            let comm_p = format!("/proc/{}/comm", pid);
+            let rss_kb = read_status_rss(&format!("/proc/{}/status", pid));
+            let comm = std::fs::read_to_string(&comm_p)
+                .ok()
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            if comm.is_empty() {
+                continue;
+            }
+            let cpu = read_pid_cpu(&stat_p).unwrap_or(0);
+            cand.push((pid, comm, rss_kb, cpu));
+        }
+    }
+    let ta = total_ticks();
+    // 采样间隔。
+    std::thread::sleep(std::time::Duration::from_millis(700));
+    let tb = total_ticks();
+    // 阶段二：依据总 CPU 刻度估算 CLK_TCK（dt 内系统总 jiffies），再算每进程 CPU%。
+    let dt_clk = tb.saturating_sub(ta).max(1) as f64;
+    let mut rows: Vec<(f64, u32, String, u64)> = Vec::new();
+    for (pid, comm, rss_kb, cpu0) in cand {
+        if let Some(cpu1) = read_pid_cpu(&format!("/proc/{}/stat", pid)) {
+            let d = cpu1.saturating_sub(cpu0);
+            let pct = (d as f64 / dt_clk * 100.0).min(100.0);
+            rows.push((pct, pid, comm, rss_kb.saturating_mul(1024)));
+        }
+    }
+    rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    rows.truncate(n.max(1));
+    let arr: Vec<String> = rows
+        .iter()
+        .map(|(pct, pid, comm, rss)| {
+            format!(
+                "{{\"cpu\":{:.1},\"pid\":{},\"name\":\"{}\",\"rss\":{},\"human\":\"{}\"}}",
+                pct,
+                pid,
+                json::jesc(comm),
+                rss,
+                json::jesc(&human(*rss))
+            )
+        })
+        .collect();
+    format!("{{\"ok\":true,\"list\":[{}]}}", arr.join(","))
+}
+
+/// /proc/stat 第一行 cpu 的累计 jiffies 总和。
+fn total_ticks() -> u64 {
+    let s = std::fs::read_to_string("/proc/stat").unwrap_or_default();
+    let line = s.lines().next().unwrap_or("");
+    line.split_whitespace()
+        .skip(1)
+        .filter_map(|x| x.parse::<u64>().ok())
+        .sum()
+}
+
+fn read_pid_cpu(p: &str) -> Option<u64> {
+    let s = std::fs::read_to_string(p).ok()?;
+    let end = s.rfind(')')?;
+    let rest = &s[end + 1..];
+    let mut it = rest.split_whitespace();
+    // rest 的 token 从字段3(state)开始；字段14/15(utime,stime) -> 下标 11/12。
+    let mut i = 0;
+    while i < 11 {
+        it.next()?;
+        i += 1;
+    }
+    let utime = it.next().and_then(|x| x.parse::<u64>().ok())?; // idx 11
+    let stime = it.next().and_then(|x| x.parse::<u64>().ok())?; // idx 12
+    Some(utime + stime)
+}
+
+fn read_status_rss(p: &str) -> u64 {
+    std::fs::read_to_string(p)
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find(|l| l.starts_with("VmRSS:"))
+                .and_then(|l| l.split_whitespace().nth(1).and_then(|x| x.parse().ok()))
+        })
+        .unwrap_or(0)
+}

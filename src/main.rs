@@ -12,6 +12,7 @@ mod http;
 mod json;
 mod lang;
 mod mcp;
+mod nginx;
 mod panel;
 mod plugins;
 mod shop;
