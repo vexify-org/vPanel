@@ -1,0 +1,57 @@
+# vPanel 软件商店 · 应用清单
+# 面板从该仓库实时拉取本文件（走加速前缀 g.z321.cc.cd）。
+# 每条用 {accel} 表示加速前缀，安装时自动替换。
+apps:
+  - id: nginx
+    name: Nginx
+    desc: 高性能 Web / 反向代理服务器
+    script: |
+      set -e
+      apt-get update -qq
+      apt-get install -y -qq nginx
+  - id: docker
+    name: Docker
+    desc: 容器运行时（官方脚本，走加速）
+    script: |
+      set -e
+      curl -fsSL "{accel}https://get.docker.com" | sh
+  - id: redis
+    name: Redis
+    desc: 内存键值数据库
+    script: |
+      set -e
+      apt-get update -qq && apt-get install -y -qq redis-server
+  - id: mysql
+    name: MySQL
+    desc: 关系型数据库
+    script: |
+      set -e
+      apt-get update -qq
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mysql-server
+  - id: go
+    name: Go
+    desc: Go 语言工具链（官方 tarball，走加速）
+    script: |
+      set -e
+      curl -fsSL "{accel}https://go.dev/dl/go1.23.2.linux-amd64.tar.gz" | tar -C /usr/local -xz
+      echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
+  - id: node
+    name: Node.js
+    desc: Node.js 运行时（NodeSource 脚本，走加速）
+    script: |
+      set -e
+      curl -fsSL "{accel}https://deb.nodesource.com/setup_lts.x" | bash -
+      apt-get install -y -qq nodejs
+  - id: gitlab
+    name: GitLab CE
+    desc: 自托管 Git 仓库（官方脚本）
+    script: |
+      set -e
+      curl -fsSL "{accel}https://packages.gitlab.com/install/repositories/gitlab/gitlab-ee/script.deb.sh" | bash
+  - id: fail2ban
+    name: Fail2ban
+    desc: 暴力破解防护
+    script: |
+      set -e
+      apt-get update -qq && apt-get install -y -qq fail2ban
+      systemctl enable --now fail2ban
