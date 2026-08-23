@@ -26,10 +26,12 @@ pub struct State {
     pub active: AtomicU64,
     pub conns: AtomicU64,
     pub cfg: Config,
+    pub monitor: Arc<crate::system::Monitor>,
 }
 
 /// 启动监听并派发工作线程。阻塞运行，直到进程退出。
 pub fn serve(cfg: Config) -> std::io::Result<()> {
+    let monitor = crate::system::Monitor::start();
     let addr = format!("{}:{}", cfg.server.bind, cfg.server.port);
     let listener = TcpListener::bind(&addr)?;
     listener.set_nonblocking(true)?;
@@ -40,6 +42,7 @@ pub fn serve(cfg: Config) -> std::io::Result<()> {
         active: AtomicU64::new(0),
         conns: AtomicU64::new(0),
         cfg,
+        monitor,
     });
 
     // 有界队列：高并发时连接在此排队或直接拒绝，内存不随之膨胀。
@@ -117,7 +120,9 @@ fn handle(stream: &mut TcpStream, state: &State) {
     // 只解析请求行，取方法 + 路径。
     let head = String::from_utf8_lossy(&buf[..n.min(MAX_REQ)]);
     let line = head.lines().next().unwrap_or("");
-    let target = line.split_whitespace().nth(1).unwrap_or("/");
+    let mut wt = line.split_whitespace();
+    let method = wt.next().unwrap_or("GET").to_string();
+    let target = wt.next().unwrap_or("/");
 
     // Web Socket 与会话式终端：升级为长连接并驱动 PTY。
     if target == "/ws" {
@@ -128,6 +133,16 @@ fn handle(stream: &mut TcpStream, state: &State) {
             }
             state.active.fetch_sub(1, Ordering::Relaxed);
         }
+        return;
+    }
+
+    // POST 请求体（按 Content-Length 读取）。
+    let body = read_body(stream, &head, &buf[..n]);
+
+    // /api/* 端点：JSON 数据或操作。
+    if target.starts_with("/api/") {
+        let resp = crate::api::route(&method, target, &body, state);
+        let _ = respond(stream, "200 OK", "application/json; charset=utf-8", &resp);
         return;
     }
 
@@ -156,6 +171,41 @@ fn handle(stream: &mut TcpStream, state: &State) {
 
     let _ = respond(stream, status, ctype, &body);
     // 处理完即关闭连接。
+}
+
+/// 读取请求头之后的请求体：先取缓冲区剩余，再按 Content-Length 补充。
+fn read_body(stream: &mut TcpStream, head: &str, buf: &[u8]) -> Vec<u8> {
+    let clen: usize = head
+        .split("\r\n")
+        .find_map(|l| {
+            let lower = l.to_ascii_lowercase();
+            if lower.starts_with("content-length:") {
+                lower
+                    .split_once(':')
+                    .and_then(|(_, v)| v.trim().parse().ok())
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0);
+    if clen == 0 {
+        return Vec::new();
+    }
+    // 头结束位置。
+    let head_end = match head.find("\r\n\r\n") {
+        Some(i) => i + 4,
+        None => return Vec::new(),
+    };
+    let mut body = buf[head_end.min(buf.len())..buf.len().min(head_end + clen)].to_vec();
+    while body.len() < clen {
+        let mut t = [0u8; 2048];
+        match stream.read(&mut t) {
+            Ok(0) | Err(_) => break,
+            Ok(m) => body.extend_from_slice(&t[..m]),
+        }
+    }
+    body.truncate(clen);
+    body
 }
 
 /// 只读取最多 MAX_REQ 字节（HTTP 请求头通常足够）。

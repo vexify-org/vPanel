@@ -4,9 +4,13 @@
 //!   panel                # 读取 ./panel.yml
 //!   panel /path/a.yml    # 读取指定配置
 
+mod api;
 mod config;
+mod ctl;
 mod http;
+mod json;
 mod panel;
+mod system;
 mod term;
 mod ws;
 
