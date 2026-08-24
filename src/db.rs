@@ -232,6 +232,28 @@ fn shq(s: &str) -> String {
     format!("'{}'", s.replace('\'', "\\'"))
 }
 
+/// 重置 MySQL 的 root 用户密码（通过 ALTER USER，用当前密码经 MYSQL_PWD 传递）。
+/// 注意：若旧密码未知/错误，本调用会失败；如需彻底重置请走面板外维护（--skip-grant-tables）。
+pub fn reset_root_password(cfg: &Database, new_password: &str) -> (bool, String) {
+    let npw = new_password.trim();
+    if npw.len() < 4 {
+        return (false, "新密码至少 4 位".to_string());
+    }
+    let script = format!(
+        "MYSQL_PWD={} {} -u{} -e \"ALTER USER 'root'@'localhost' IDENTIFIED BY '{}'\"",
+        shq(&cfg.password),
+        shq(&cfg.bin),
+        cfg.user,
+        npw.replace('\'', "\\'")
+    );
+    let out = std::process::Command::new("bash").arg("-c").arg(&script).output();
+    match out {
+        Ok(o) if o.status.success() => (true, "root 密码已重置".to_string()),
+        Ok(o) => (false, String::from_utf8_lossy(&o.stderr).trim().to_string()),
+        Err(e) => (false, e.to_string()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

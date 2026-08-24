@@ -353,7 +353,8 @@ fn action_route(target: &str, body: &[u8], _qs: &str) -> String {
             let listen = json::form_get(&fields, "listen").unwrap_or("80").trim().to_string();
             let php = json::form_get(&fields, "php").unwrap_or("0").trim() == "1"
                 || json::form_get(&fields, "php").unwrap_or("0").trim() == "true";
-            let (ok, msg) = crate::website::website_create(&name, &domain, &listen, php);
+            let phpver = json::form_get(&fields, "php_version").unwrap_or("").trim().to_string();
+            let (ok, msg) = crate::website::website_create(&name, &domain, &listen, php, &phpver);
             ok_bool(ok, msg)
         }
         "/api/website/toggle" => {
@@ -461,6 +462,10 @@ fn action_route(target: &str, body: &[u8], _qs: &str) -> String {
             let f = json::form_get(&fields, "file").unwrap_or("").trim().to_string();
             dbj(crate::db::restore(&state_cfg_database(), &d, &f))
         }
+        "/api/db/reset_root" => {
+            let npw = json::form_get(&fields, "password").unwrap_or("").trim().to_string();
+            dbj(crate::db::reset_root_password(&state_cfg_database(), &npw))
+        }
         "/api/ssl/import" => {
             let n = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
             let fc = json::form_get(&fields, "fullchain").unwrap_or("").to_string();
@@ -529,6 +534,10 @@ fn action_route(target: &str, body: &[u8], _qs: &str) -> String {
             dbj((ok, msg))
         }
         "/api/backup/schedule_remove" => dbj(crate::backup::schedule_remove()),
+        "/api/backup/cloud" => {
+            let file = json::form_get(&fields, "file").unwrap_or("").trim().to_string();
+            dbj(crate::backup::cloud_upload(&file))
+        }
         "/api/env/install" => {
             let id = json::form_get(&fields, "id").unwrap_or("").trim().to_string();
             dbj(crate::env::install(&id))

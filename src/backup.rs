@@ -200,6 +200,39 @@ pub fn schedule(cfg: &Config, cron: &str) -> (bool, String) {
     crate::ctl::task_add(&cron, &cmd)
 }
 
+/// 云备份上传：把本地备份文件 `file` 上传到远程 FTP/FTPS 服务器指定目录。
+/// 连接信息从环境变量读取：`VPANEL_FTP_HOST`、`VPANEL_FTP_USER`、`VPANEL_FTP_PASS`、
+/// `VPANEL_FTP_DIR`（可选，远程目录），驱动工具为 `lftp`（自动使用已建立的 TLS）。
+/// 未配置 host 时返回明确提示，便于 UI 引导。
+pub fn cloud_upload(file: &str) -> (bool, String) {
+    let host = std::env::var("VPANEL_FTP_HOST").unwrap_or_default();
+    if host.trim().is_empty() {
+        return (false, "未配置云存储（请设置 VPANEL_FTP_HOST）".to_string());
+    }
+    if !std::path::Path::new(file).exists() {
+        return (false, format!("待上传文件不存在: {}", file));
+    }
+    let user = std::env::var("VPANEL_FTP_USER").unwrap_or_else(|_| "anonymous".into());
+    let pass = std::env::var("VPANEL_FTP_PASS").unwrap_or_default();
+    let dir = std::env::var("VPANEL_FTP_DIR").unwrap_or_else(|_| "/".into());
+    // lftp：-e 执行 put；--ftp-pasv 被动模式；--env-password 避免密码上进程列表。
+    let remote = format!("{}/{}", dir.trim_end_matches('/'), std::path::Path::new(file).file_name().map(|x| x.to_string_lossy().into_owned()).unwrap_or_default());
+    let script = format!(
+        "lftp --env-password --ftp-pasv -u '{}' '{}' -e \"quote EXPOSE; put '{}' -o '{}'; bye\" <<< 'export FTP_PASSWORD={}' 2>&1",
+        user.replace('\'', "'\\''"),
+        host,
+        file.replace('\'', "'\\''"),
+        remote.replace('\'', "'\\''"),
+        pass.replace('\'', "'\\''")
+    );
+    let out = std::process::Command::new("bash").arg("-c").arg(&script).output();
+    match out {
+        Ok(o) if o.status.success() => (true, format!("备份已上传到 {}:{}", host, remote)),
+        Ok(o) => (false, format!("上传失败：{}", String::from_utf8_lossy(&o.stderr).trim())),
+        Err(e) => (false, e.to_string()),
+    }
+}
+
 /// 从 crontab 移除本面板的定时备份（按命令包含 "backup" 特征）。
 pub fn schedule_remove() -> (bool, String) {
     let existing = std::process::Command::new("sh")

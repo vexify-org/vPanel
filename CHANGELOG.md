@@ -4,6 +4,29 @@
 > 记录约定：按 `语义化版本` 组织，`v1.3.0` 为当前主干版本；往下为规划中的目标版本（对标宝塔能力补全）。
 > 内存目标：常驻内存 ≤ 10MB。
 
+## v1.4.0（待发布）
+
+本轮为「宝塔功能全量补齐」，重点是给已有后端模块接入**可视化前端页面**，并新增若干后端能力。
+
+### 新增
+- **建站支持指定 PHP 版本**（`src/website.rs`）
+  - `php_socket_for()` 按版本映射 socket：`8.2` → `/run/php/php8.2-fpm.sock`，空/非法回退默认
+  - `website_create(..., php, phpver)` 新增 `php_version` 参数；接口 `POST /api/website/create` 支持 `php_version` 字段
+- **数据库管理前端**（`src/panel.rs`，新「数据库」tab）
+  - 对接已有后端 + 新增 `/api/db/reset_root` 重置 root 密码（`src/db.rs` 新增 `reset_root_password`）
+  - 建库/删库/建用户/授权/备份可视化
+- **环境运行时前端**（新「环境」tab）：nginx/mysql/redis/php/node/docker/go 安装/启停/重启
+- **SSL 证书前端**（新「证书」tab）：自签 / Let's Encrypt 签发 / 导入已有证书 / 套用到站点
+- **备份前端**（新「备份」tab）：全量备份 / 目录备份 / 定时备份 / 移除 / 云上传
+- **云备份上传**（`src/backup.rs` 新增 `cloud_upload`，`/api/backup/cloud`）：经 `lftp` 推送到远程 FTP，连接信息用 `VPANEL_FTP_HOST/USER/PASS/DIR` 环境变量，未配置时给出引导提示
+- **安全加固前端**（新「安全」tab）：SSH 加固/撤销、WAF 开关、已封禁 IP、暴力破解扫描封禁
+
+### 验证
+- 单测：36/36 通过（含建站 PHP 版本 socket 映射断言）
+- 实测内存：debug 构建常驻 RSS ≈ 6.2MB（含新前端）
+
+---
+
 ## v1.3.0（当前）
 
 本次为「建站能力」与「建站前端」的功能补齐。

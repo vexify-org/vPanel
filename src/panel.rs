@@ -235,8 +235,8 @@ form.rowform{display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wr
 <div class="toast" id="toast"></div>
 <script>
 var ACCENT='__ACCENT__', SHELL_ON=__SHELL_ON__;
-var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务",shop:"软件商店",mcp:"AI 工具",plg:"插件",inf:"系统信息",net:"网络连接",log:"实时日志",fs:"文件管理",dk:"磁盘占用",rp:"反向代理",web:"网站管理",rs:"资源排行"};
-var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["web","网站"],["fw","安全"],["tk","定时"],["rp","反代"],["shop","商店"],["mcp","AI"],["plg","插件"],["inf","信息"],["net","连接"],["log","日志"],["fs","文件"],["dk","磁盘"],["rs","资源"]];
+var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务",shop:"软件商店",mcp:"AI 工具",plg:"插件",inf:"系统信息",net:"网络连接",log:"实时日志",fs:"文件管理",dk:"磁盘占用",rp:"反向代理",web:"网站管理",db:"数据库",env:"环境",cert:"SSL证书",bk:"备份",hd:"安全加固",rs:"资源排行"};
+var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["web","网站"],["db","数据库"],["env","环境"],["cert","证书"],["bk","备份"],["hd","安全"],["fw","防火墙"],["tk","定时"],["rp","反代"],["shop","商店"],["mcp","AI"],["plg","插件"],["inf","信息"],["net","连接"],["log","日志"],["fs","文件"],["dk","磁盘"],["rs","资源"]];
 if(SHELL_ON)TABS.push(["term","终端"]);
 var cur="ov";
 
@@ -256,8 +256,106 @@ function choose(){window.clearInterval(window._iv);$('ttl').textContent=TITLES[c
   if(cur==='inf')loadInf(); if(cur==='net'){loadNet();window._iv=setInterval(loadNet,3000)}
   if(cur==='log')loadLogCfg(); if(cur==='fs')loadFs('/');
   if(cur==='dk')loadDk('/'); if(cur==='rp')loadRp(); if(cur==='web')loadWeb();
+  if(cur==='db')loadDb(); if(cur==='env')loadEnv(); if(cur==='cert')loadCert(); if(cur==='bk')loadBk(); if(cur==='hd')loadHd();
   if(cur==='rs'){loadRs();window._iv=setInterval(loadRs,5000)}
 }
+function getJson(path,cb){fetch(path).then(function(r){return r.json()}).then(function(j){cb(j||{})}).catch(function(){cb({ok:false})})}
+function act(path,fields){post(path,fields,function(res){toast(res.msg||(res.ok?'操作成功':'操作失败'));setTimeout(reload,800)})}
+function fmtSize(n){if(n==null)return '-';if(n>1073741824)return(n/1073741824).toFixed(2)+'G';if(n>1048576)return(n/1048576).toFixed(1)+'M';if(n>1024)return(n/1024).toFixed(0)+'K';return n+'B'}
+function fmtTime(t){if(!t)return '-';var d=new Date((t<1e12?t*1000:t));return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)}
+function loadDb(){
+  var b=$('#box');
+  b.innerHTML='<div class="card"><b>数据库</b> <span id="dbst"></span></div>'+
+    '<div class="gridg" style="grid-template-columns:1fr 1fr;gap:12px">'+
+      '<div class="card"><b>数据库操作</b><div class="row"><input id="dbname" placeholder="库名"><input id="dbcs" placeholder="字符集(默认utf8mb4)" style="width:140px"><button onclick="postGlobalDB()">建库</button></div>'+
+      '<div class="row"><input id="dbname2" placeholder="删除的库名"><button class="danger" onclick="dropDB()">删库</button></div>'+
+      '<div class="row"><input id="dbuser" placeholder="用户名"><input id="dbpass" type="password" placeholder="密码"><input id="dbhost" placeholder="host(localhost)" style="width:120px"><button onclick="postDBUser()">建用户</button></div>'+
+      '<div class="row"><input id="grantdb" placeholder="授权库"><input id="grantuser" placeholder="用户"><button onclick="grantDB()">授权</button></div>'+
+      '<div class="row"><input id="backupdb" placeholder="备份的库名"><button onclick="backupDB()">备份</button></div>'+
+      '<div class="row"><input id="newroot" type="password" placeholder="新root密码"><button class="danger" onclick="resetRoot()">重置root密码</button></div>'+
+      '</div>'+
+      '<div class="card"><b>用户列表</b><div id="dblist"></div></div>'+
+      '<div class="card"><b>数据库</b><div id="dbnames"></div></div>'+
+    '</div>';
+  getJson('/api/db/status',function(j){var s=j.installed?(j.running?'运行中':'已装但未运行'):'未安装';$('#dbst').innerHTML='状态：<b>'+s+'</b>（用户：'+esc(j.user||'')+'）'});
+  loadDBName();
+}
+function postGlobalDB(){var n=$('#dbname').value.trim();if(!n)return toast('请输入库名');act('/api/db/create_db',{db:n,charset:$('#dbcs').value||'utf8mb4'})}
+function dropDB(){var n=$('#dbname2').value.trim();if(!n)return toast('请输入库名');if(!confirm('确认删除数据库 '+n+' ？'))return;act('/api/db/drop_db',{db:n})}
+function postDBUser(){act('/api/db/create_user',{user:$('#dbuser').value,pass:$('#dbpass').value,host:$('#dbhost').value||'localhost'})}
+function grantDB(){act('/api/db/grant',{db:$('#grantdb').value,user:$('#grantuser').value,host:$('#dbhost')?$('#dbhost').value||'localhost':'localhost'})}
+function backupDB(){var n=$('#backupdb').value.trim();if(!n)return toast('请输入库名');act('/api/db/backup',{db:n})}
+function resetRoot(){var p=$('#newroot').value;if(!p||p.length<4)return toast('密码至少4位');if(!confirm('确认重置数据库 root 密码？'))return;act('/api/db/reset_root',{password:p})}
+function loadDBName(){getJson('/api/db/databases',function(j){var d=(j&&j.data)||[];$('dblist').innerHTML='<div vp-tbl>'+d.map(function(n){return'<div class="kr"><b>'+esc(n)+'</b><span><button onclick="backupDBByName(\''+n+'\')">备份</button><button class="danger" onclick="dropDBName(\''+n+'\')">删除</button></span></div>'}).join('')+'</div>';if(d.length===0)$('dblist').innerHTML+='<div class="muted">暂无数据库</div>'})}
+function backupDBByName(n){act('/api/db/backup',{db:n})}
+function dropDBName(n){if(!confirm('确认删除数据库 '+n+' ？'))return;act('/api/db/drop_db',{db:n})}
+function loadEnv(){
+  var b=$('#box');
+  b.innerHTML='<div class="card"><b>环境运行时</b>（安装需系统软件源可达）</div><div id="envlist" vp-tbl></div>';
+  getJson('/api/env',function(j){var l=(j&&j.list)||[];$('envlist').innerHTML=l.map(function(r){
+    return'<div class="kr"><b>'+esc(r.name)+'</b><span class="muted">'+esc(r.version||'-')+'</span><b style="margin-left:auto">'+((r.installed)?(r.running?'运行中':'已停'):'未安装')+'</b><span>'+
+    (r.installed
+      ?'<button onclick="act(\'/api/env/service\',{id:\''+r.id+'\',action:\'restart\'})">重启</button><button onclick="act(\'/api/env/service\',{id:\''+r.id+'\',action:\'start\'})">启动</button><button class="danger" onclick="act(\'/api/env/service\',{id:\''+r.id+'\',action:\'stop\'})">停止</button>'
+      :'<button onclick="act(\'/api/env/install\',{id:\''+r.id+'\'})">安装</button>')+
+    '</span></div>'
+  }).join('')+'<div class="muted">备注：'+ (l.map(function(r){return esc(r.remark)}).join(' · ')) +'</div>'})
+}
+function loadCert(){
+  var b=$('#box');
+  b.innerHTML='<div class="card"><b>SSL 证书</b>（目录 <span id="certsdir"></span>）</div>'+
+    '<div class="card"><b>签发证书</b><div class="row"><input id="cname" placeholder="证书名"><input id="cdomain" placeholder="域名"><button onclick="selfSigned()">自签</button></div>'+
+    '<div class="row"><input id="cdomain2" placeholder="域名"><input id="cwebroot" placeholder="webroot目录"><button onclick="leIssue()">Let\u0027s Encrypt 签发</button></div>'+
+    '<div class="row"><span class="muted">导入已有证书：</span><input id="cimportname" placeholder="证书名" style="width:120px"><button onclick="importCert()">导入「内嵌表单已填」</button></div>'+
+    '<div class="row"><textarea id="cimpfc" rows="3" placeholder="fullchain.pem 内容"></textarea></div>'+
+    '<div class="row"><textarea id="cimpk" rows="3" placeholder="privkey.key 内容"></textarea></div></div>'+
+    '<div id="certlist"></div>';
+  getJson('/api/ssl',function(j){$('#certsdir').textContent=j.dir||'';var l=(j&&j.list)||[];$('#certlist').innerHTML='<div vp-tbl>'+l.map(function(c){
+    return'<div class="kr"><b>'+esc(c.name)+'</b><span class="muted">'+esc(c.domain||'-')+'</span><span class="muted">到期：'+esc(c.not_after||'-')+'</span><span>'+(c.ok?'有效':'无效')+'</span>'+
+    '<button onclick="applyCert(\''+c.name+'\')">套用到站点</button></div>'}).join('')+'</div>'})
+}
+function selfSigned(){act('/api/ssl/self_signed',{name:$('#cname').value,domain:$('#cdomain').value,days:365})}
+function leIssue(){act('/api/ssl/le_issue',{name:$('#cdomain2').value.replace(/\\./g,'_'),domain:$('#cdomain2').value,webroot:$('#cwebroot').value||'/var/www/html'})}
+function importCert(){act('/api/ssl/import',{name:$('#cimportname').value,fullchain:$('#cimpfc').value,privkey:$('#cimpk').value})}
+function applyCert(n){var site=prompt('套用证书到哪个站点名？');if(!site)return;act('/api/ssl/apply',{site:site,cert:n,upgrade:true})}
+function loadBk(){
+  var b=$('#box');
+  b.innerHTML='<div class="card"><b>备份</b> <span id="bkcfg"></span></div>'+
+    '<div class="gridg" style="grid-template-columns:1fr 1fr;gap:12px">'+
+      '<div class="card"><b>手动备份</b><div class="row"><button onclick="bkRun()">立即全量备份</button></div>'+
+      '<div class="row"><input id="bksrc" placeholder="要备份的目录路径"><input id="bkkeep" placeholder="保留份数" style="width:100px"><button onclick="bkDir()">目录备份</button></div></div>'+
+      '<div class="card"><b>定时备份</b><div class="row"><input id="bkcron" placeholder="cron 表达式, 默认每天2:00"><button onclick="bkSched()">设置</button></div>'+
+      '<div class="row"><button class="danger" onclick="bkSchedRemove()">移除定时备份</button></div></div>'+
+    '</div>'+
+    '<div class="card"><b>备份文件</b><div id="bkflist"></div></div>';
+  getJson('/api/backup',function(j){$('#bkcfg').textContent='目录：'+(j.dir||'-')+'，保留 '+esc(j.keep)+' 份';var f=(j.files||[]);$('#bkflist').innerHTML='<div vp-tbl>'+f.map(function(x){return'<div class="kr"><b>'+esc(x.name)+'</b><span class="muted">'+fmtSize(x.size)+'</span><span class="muted">'+fmtTime(x.mtime)+'</span><button onclick="bkCloud(\''+x.name.replace(/'/g,"")+'\')">上传云</button></div>'}).join('')+'</div>';if(!f.length)$('#bkflist').innerHTML='<div class="muted">暂无备份文件</div>'})
+}
+function bkRun(){act('/api/backup/run',{})}
+function bkDir(){act('/api/backup/dir',{path:$('#bksrc').value,keep:$('#bkkeep').value||5})}
+function bkSched(){act('/api/backup/schedule',{cron:$('#bkcron').value||'0 2 * * *'})}
+function bkSchedRemove(){if(!confirm('确认移除定时备份？'))return;act('/api/backup/schedule_remove',{})}
+function bkCloud(f){if(!confirm('上传 '+f+' 到云存储？'))return;act('/api/backup/cloud',{file:f})}
+function loadHd(){
+  var b=$('#box');
+  b.innerHTML='<div class="card"><b>安全加固</b> <span id="hdstate"></span></div>'+
+    '<div class="gridg" style="grid-template-columns:1fr 1fr;gap:12px">'+
+      '<div class="card"><b>SSH 加固</b><div class="row"><button onclick="harden(true)">禁止root密码登录</button><button class="danger" onclick="unharden()">撤销加固</button></div>'+
+      '<div class="row"><span class="muted">加固将写入 sshd_config.d，先经 sshd -t 校验，失败自动回滚。</span></div></div>'+
+      '<div class="card"><b>WAF</b><span id="wafstate"></span><div class="row"><input id="wafrps" placeholder="每秒请求上限" style="width:120px"><input id="wafburst" placeholder="突发上限" style="width:120px"><button onclick="wafOn()">开启WAF</button></div>'+
+      '<div class="row"><button class="danger" onclick="wafOff()">关闭WAF</button></div></div>'+
+    '</div>'+
+    '<div class="card"><b>已封禁IP</b><div id="banlist"></div><div class="row"><input id="banip" placeholder="要封禁的IP"><button onclick="banIP()">封禁</button></div>'+
+    '<div class="row"><button onclick="bruteScan()">暴力破解扫描并封禁</button></div></div>';
+  getJson('/api/security/hardening',function(j){$('#hdstate').innerHTML=(j.on)?'当前：已加固':'当前：未加固'});
+  getJson('/api/security/waf',function(j){$('#wafstate').textContent=(j.on)?'已开启':'已关闭'});
+  getJson('/api/security/bans',function(j){var l=(j.list)||[];$('#banlist').innerHTML='<div vp-tbl>'+l.map(function(ip){return'<div class="kr"><b>'+esc(ip)+'</b><button onclick="unbanIP(\''+ip+'\')">解封</button></div>'}).join('')+'</div>';if(!l.length)$('#banlist').innerHTML='<div class="muted">暂无封禁IP</div>'});
+}
+function harden(nr){act('/api/security/harden',{no_root_pass:(nr?'1':'0'),no_password:'1'})}
+function unharden(){if(!confirm('确认撤销 SSH 加固？'))return;act('/api/security/unharden',{})}
+function wafOn(){act('/api/security/waf/enable',{rps:$('#wafrps').value||30,burst:$('#wafburst').value||50})}
+function wafOff(){act('/api/security/waf/disable',{})}
+function banIP(){var ip=$('#banip').value.trim();if(!ip)return toast('请输入IP');act('/api/security/ban',{ip:ip})}
+function unbanIP(ip){act('/api/security/unban',{ip:ip})}
+function bruteScan(){if(!confirm('扫描认证日志并封禁高失败IP？'))return;act('/api/security/brute',{threshold:5})}
 
 function chart(cid){return {id:cid,path:"",draw:function(arr,color,max){var v=$('svg#c'+cid);if(!v)return;var w=v.clientWidth||300,h=v.clientHeight||120,n=arr.length;if(!n)return;var pad=2;function px(arr){var t="";for(var i=0;i<n;i++){var x=pad+(i/(n-1))*(w-2*pad);var val=Math.min(arr[i]||0,max||100);var y=h-pad-(h-2*pad)*(val/(max||100));t+=(i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1)}return t}
       var t='<svg id="c'+cid+'" preserveAspectRatio="none"><path d="'+px(arr)+'" fill="none" stroke="'+color+'" stroke-width="2"/></svg>';

@@ -53,6 +53,22 @@ fn php_socket() -> String {
     dry_prefix(&s)
 }
 
+/// 按 PHP 版本解析对应的 php-fpm socket 路径。
+/// 例：版本 `8.2` → `/run/php/php8.2-fpm.sock`；版本为空/非法时回退到默认 socket。
+fn php_socket_for(ver: &str) -> String {
+    let v = ver.trim();
+    if v.is_empty() {
+        return php_socket();
+    }
+    // 兼容 `8.2`、`php8.2` 两种写法
+    let safe = v.strip_prefix("php").unwrap_or(v);
+    if safe.is_empty() || !safe.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') {
+        return php_socket();
+    }
+    let s = format!("/run/php/php{}-fpm.sock", safe);
+    dry_prefix(&s)
+}
+
 fn available() -> bool {
     std::path::Path::new(&avail_dir()).is_dir()
 }
@@ -289,8 +305,8 @@ pub fn website_list_json() -> String {
 // 建站 / 删除 / 启停 / 伪静态
 // ---------------------------------------------------------------------------
 
-/// 创建网站。php 为 true 时接入 PHP-FPM。
-pub fn website_create(name: &str, domain: &str, port: &str, php: bool) -> (bool, String) {
+/// 创建网站。php 为 true 时接入 PHP-FPM；phpver 指定 PHP 版本（空则用默认 socket）。
+pub fn website_create(name: &str, domain: &str, port: &str, php: bool, phpver: &str) -> (bool, String) {
     if !available() {
         return (false, format!("未找到 nginx 配置目录 {}", avail_dir()));
     }
@@ -332,8 +348,9 @@ pub fn website_create(name: &str, domain: &str, port: &str, php: bool) -> (bool,
     }
 
     // 2) 生成 nginx 配置
+    let socket = if php { php_socket_for(phpver) } else { String::new() };
     let conf = if php {
-        php_site_conf(domain.trim(), port, &site_dir, &php_socket())
+        php_site_conf(domain.trim(), port, &site_dir, &socket)
     } else {
         static_site_conf(domain.trim(), port, &site_dir)
     };
@@ -553,11 +570,12 @@ mod tests {
 
         with_sandbox(&td, || {
             // 建 PHP 站点
-            let (ok, msg) = website_create("blog", "blog.example.com", "80", true);
+            let (ok, msg) = website_create("blog", "blog.example.com", "80", true, "8.2");
             assert!(ok, "create should succeed: {}", msg);
             let conf = std::fs::read_to_string(td.join("etc/nginx/sites-available/blog.conf")).unwrap();
             assert!(conf.contains("server_name blog.example.com;"), "domain in conf");
             assert!(conf.contains("fastcgi_pass"), "php block present");
+            assert!(conf.contains("php8.2-fpm.sock"), "php version socket mapped: {}", conf);
             assert!(std::path::Path::new(&td.join("srv/sites/blog/index.html")).exists(), "docroot index created");
 
             // 列表能识别出它
@@ -585,7 +603,7 @@ mod tests {
             assert!(ok);
 
             // 静态站点
-            let (ok, _) = website_create("static1", "a.example.com", "8080", false);
+            let (ok, _) = website_create("static1", "a.example.com", "8080", false, "");
             assert!(ok);
             let sconf = std::fs::read_to_string(td.join("etc/nginx/sites-available/static1.conf")).unwrap();
             assert!(!sconf.contains("fastcgi_pass"), "static site has no php");
