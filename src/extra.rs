@@ -440,6 +440,107 @@ pub fn download(path: &str) -> Option<Vec<u8>> {
     std::fs::read(path).ok()
 }
 
+/// 创建目录（递归）。可选设置模式；默认不限制。
+pub fn mkdir(path: &str) -> (bool, String) {
+    match std::fs::create_dir_all(path) {
+        Ok(_) => (true, format!("已创建目录 {}", path)),
+        Err(e) => (false, format!("创建目录失败: {}", e)),
+    }
+}
+
+/// 重命名 / 移动文件或目录。
+pub fn rename(src: &str, dst: &str) -> (bool, String) {
+    if !std::path::Path::new(src).exists() {
+        return (false, format!("源不存在: {}", src));
+    }
+    match std::fs::rename(src, dst) {
+        Ok(_) => (true, format!("已重命名 {} -> {}", src, dst)),
+        Err(e) => (false, format!("重命名失败: {}", e)),
+    }
+}
+
+/// 磁盘分区占用总览（df -P：文件系统、块、已用、可用、使用%、挂载点）-> JSON。
+pub fn disk_usage_json() -> String {
+    let out = std::process::Command::new("df")
+        .args(["-Pk"])
+        .output();
+    let mut items = Vec::new();
+    match out {
+        Ok(o) if o.status.success() => {
+            let text = String::from_utf8_lossy(&o.stdout);
+            for line in text.lines().skip(1) {
+                let f: Vec<&str> = line.split_whitespace().collect();
+                if f.len() < 6 {
+                    continue;
+                }
+                let fs = f.get(0).copied().unwrap_or("");
+                let size = f.get(1).and_then(|x| x.parse::<u64>().ok()).unwrap_or(0) * 1024;
+                let used = f.get(2).and_then(|x| x.parse::<u64>().ok()).unwrap_or(0) * 1024;
+                let avail = f.get(3).and_then(|x| x.parse::<u64>().ok()).unwrap_or(0) * 1024;
+                let pct = f.get(4).copied().unwrap_or("").trim_end_matches('%');
+                let mount = f.get(5).copied().unwrap_or("");
+                items.push(format!(
+                    "{{\"fs\":\"{}\",\"size\":{},\"used\":{},\"avail\":{},\"use_pct\":{},\"mount\":\"{}\"}}",
+                    json::jesc(fs),
+                    size,
+                    used,
+                    avail,
+                    pct,
+                    json::jesc(mount)
+                ));
+            }
+        }
+        _ => return "{\"ok\":false,\"msg\":\"无法读取磁盘信息\"}".to_string(),
+    }
+    format!("{{\"ok\":true,\"list\":[{}]}}", items.join(","))
+}
+
+/// 列出容器（docker ps -a 精简视图）-> JSON。
+pub fn docker_containers_json() -> String {
+    let out = std::process::Command::new("docker")
+        .args(["ps", "-a", "--format", "{{.ID}}|{{.Image}}|{{.Names}}|{{.Status}}|{{.Ports}}"])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => {
+            let text = String::from_utf8_lossy(&o.stdout);
+            let mut items = Vec::new();
+            for line in text.lines() {
+                let mut it = line.splitn(5, '|');
+                let id = it.next().unwrap_or("");
+                let image = it.next().unwrap_or("");
+                let name = it.next().unwrap_or("");
+                let status = it.next().unwrap_or("");
+                let ports = it.next().unwrap_or("");
+                items.push(format!(
+                    "{{\"id\":\"{}\",\"image\":\"{}\",\"name\":\"{}\",\"status\":\"{}\",\"ports\":\"{}\"}}",
+                    json::jesc(id),
+                    json::jesc(image),
+                    json::jesc(name),
+                    json::jesc(status),
+                    json::jesc(ports)
+                ));
+            }
+            format!("{{\"ok\":true,\"list\":[{}]}}", items.join(","))
+        }
+        _ => "{\"ok\":false,\"msg\":\"未安装 Docker 或 docker 命令不可用\"}".to_string(),
+    }
+}
+
+/// 对容器执行 start/stop/restart。
+pub fn docker_action(id: &str, action: &str) -> (bool, String) {
+    if !matches!(action, "start" | "stop" | "restart") {
+        return (false, "action 应为 start/stop/restart".into());
+    }
+    let out = std::process::Command::new("docker")
+        .args([action, id])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => (true, format!("容器 {} 已{}", id, action)),
+        Ok(o) => (false, String::from_utf8_lossy(&o.stderr).trim().to_string()),
+        Err(e) => (false, e.to_string()),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // 5. 磁盘占用排行
 // ---------------------------------------------------------------------------

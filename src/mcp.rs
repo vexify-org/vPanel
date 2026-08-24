@@ -152,6 +152,11 @@ fn tools_list(id: Option<i64>, state: &State) -> String {
         ("monitor_snapshot","查看历史监控数据（最近 n 个采样点），参数 n","{\"n\":{\"type\":\"number\"}}"),
         ("shop_list","列出软件商店应用","{}"),
         ("log_follow","增量查看日志，参数 file 与 pos(字节偏移)","{\"file\":{\"type\":\"string\"},\"pos\":{\"type\":\"number\"}}"),
+        ("disk_usage","磁盘分区占用总览（df）","{}"),
+        ("file_mkdir","创建目录，参数 path","{\"path\":{\"type\":\"string\"}}"),
+        ("file_rename","重命名/移动文件，参数 src 与 dst","{\"src\":{\"type\":\"string\"},\"dst\":{\"type\":\"string\"}}"),
+        ("docker_containers","列出所有 Docker 容器","{}"),
+        ("docker_action","对容器执行操作，参数 id 与 action(start/stop/restart)","{\"id\":{\"type\":\"string\"},\"action\":{\"type\":\"string\"}}"),
     ];
     let mut item = Vec::new();
     for (name, desc, schema) in tools {
@@ -220,6 +225,9 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
     let file = arg_str(&args, "file");
     let n: usize = arg_str(&args, "n").parse().unwrap_or(20);
     let pos: u64 = arg_str(&args, "pos").parse().unwrap_or(0);
+    // 文件操作 / 容器 / 磁盘
+    let src = arg_str(&args, "src");
+    let dst = arg_str(&args, "dst");
     let server_name = arg_str(&args, "server_name");
     let listen = arg_str(&args, "listen");
     let target = arg_str(&args, "target");
@@ -425,6 +433,11 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
         "monitor_snapshot" => (true, crate::monitor::monitor_json(n)),
         "shop_list" => (true, state.shop.list_json(&state.cfg)),
         "log_follow" => (true, crate::extra::log_follow_json(&file, pos)),
+        "disk_usage" => (true, crate::extra::disk_usage_json()),
+        "file_mkdir" => crate::extra::mkdir(&path),
+        "file_rename" => crate::extra::rename(&src, &dst),
+        "docker_containers" => (true, crate::extra::docker_containers_json()),
+        "docker_action" => crate::extra::docker_action(&fname, &action),
         _ => plugin_or_unknown(state, name.as_str(), &args),
     };
     let result = format!(

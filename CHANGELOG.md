@@ -24,6 +24,11 @@
   - 新增 60 个内置工具，覆盖 网站 / 数据库 / SSL / 运行环境 / 备份 / 安全(WAF+加固) / IotaPanel 插件 / 插件商店 / 监控快照 / 资源排行 / 软件商店 / 日志增量
   - `tools/list` 自动产出每工具的 `inputSchema`（参数类型按字符串/数字/布尔映射）
   - 复用现有 `db/databases` 等纯函数，工具派发 `tools/call` 与 `/api/*` 同源，无新增常驻状态
+- **MCP 工具继续补全 + 新后端函数**（`src/mcp.rs`、`src/extra.rs`）
+  - 新增容器管理（对标宝塔「Docker」）：`docker_containers` 列出容器、`docker_action` 启停/重启
+  - 新增磁盘占用总览 `disk_usage`（df -Pk 解析）
+  - 新增文件操作 `file_mkdir` 创建目录、`file_rename` 重命名/移动（`src/extra.rs` 新增 `mkdir`/`rename`/`disk_usage_json`/`docker_containers_json`/`docker_action`）
+  - 内置 MCP 工具扩充至 66 个
 
 ### 验证
 - 单测：36/36 通过（含建站 PHP 版本 socket 映射断言）
