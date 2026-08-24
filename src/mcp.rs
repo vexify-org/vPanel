@@ -47,7 +47,7 @@ fn fmt_jsonrpc(id: Option<i64>, payload: String, is_error: bool) -> String {
 }
 
 fn init_resp(id: Option<i64>) -> String {
-    let result = "{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"vpanel\",\"version\":\"1.3.0\"}}";
+    let result = "{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"vpanel\",\"version\":\"1.4.0\"}}";
     fmt_jsonrpc(
         id,
         result.to_string(),
@@ -82,6 +82,76 @@ fn tools_list(id: Option<i64>, state: &State) -> String {
         ("nginx_add","新增反向代理站点，参数 name/server_name/listen/target","{\"name\":{\"type\":\"string\"},\"server_name\":{\"type\":\"string\"},\"listen\":{\"type\":\"string\"},\"target\":{\"type\":\"string\"}}"),
         ("nginx_toggle","启用/停用反代站点，参数 name 与 enable(布尔)","{\"name\":{\"type\":\"string\"},\"enable\":{\"type\":\"boolean\"}}"),
         ("nginx_delete","删除反代站点，参数 name","{\"name\":{\"type\":\"string\"}}"),
+        ("nginx_reload","重载 Nginx 配置","{}"),
+        ("autostart","设置站点/服务开机自启，参数 name 与 enable(布尔)","{\"name\":{\"type\":\"string\"},\"enable\":{\"type\":\"boolean\"}}"),
+        // ---- 网站（对标宝塔「网站」）----
+        ("website_list","列出网站（域名/端口/根目录/PHP标记/启用状态）","{}"),
+        ("website_create","创建网站，参数 name/domain/listen/php(布尔)/php_version","{\"name\":{\"type\":\"string\"},\"domain\":{\"type\":\"string\"},\"listen\":{\"type\":\"string\"},\"php\":{\"type\":\"boolean\"},\"php_version\":{\"type\":\"string\"}}"),
+        ("website_toggle","启用/停用网站，参数 name 与 enable(布尔)","{\"name\":{\"type\":\"string\"},\"enable\":{\"type\":\"boolean\"}}"),
+        ("website_delete","删除网站，参数 name 与 drop_root(布尔，是否连根目录一起删)","{\"name\":{\"type\":\"string\"},\"drop_root\":{\"type\":\"boolean\"}}"),
+        ("website_rewrite","为站点应用伪静态规则，参数 name 与 kind(wordpress/thinkphp/laravel/none)","{\"name\":{\"type\":\"string\"},\"kind\":{\"type\":\"string\"}}"),
+        // ---- 数据库（对标宝塔「数据库」）----
+        ("db_status","查看数据库安装与运行状态","{}"),
+        ("db_databases","列出所有数据库（排除系统库）","{}"),
+        ("db_users","列出所有数据库账号（user/host）","{}"),
+        ("db_backups","列出数据库备份文件","{}"),
+        ("db_create_db","创建数据库，参数 name 与 charset(默认utf8mb4)","{\"name\":{\"type\":\"string\"},\"charset\":{\"type\":\"string\"}}"),
+        ("db_drop_db","删除数据库，参数 name","{\"name\":{\"type\":\"string\"}}"),
+        ("db_create_user","创建数据库账号，参数 user/pass/host","{\"user\":{\"type\":\"string\"},\"pass\":{\"type\":\"string\"},\"host\":{\"type\":\"string\"}}"),
+        ("db_drop_user","删除数据库账号，参数 user/host","{\"user\":{\"type\":\"string\"},\"host\":{\"type\":\"string\"}}"),
+        ("db_grant","将某库权限授予账号，参数 db/user/host","{\"db\":{\"type\":\"string\"},\"user\":{\"type\":\"string\"},\"host\":{\"type\":\"string\"}}"),
+        ("db_backup","备份指定数据库，参数 db","{\"db\":{\"type\":\"string\"}}"),
+        ("db_restore","从备份文件恢复数据库，参数 db/file","{\"db\":{\"type\":\"string\"},\"file\":{\"type\":\"string\"}}"),
+        ("db_reset_root","重置 MySQL root 密码，参数 password","{\"password\":{\"type\":\"string\"}}"),
+        // ---- SSL 证书（对标宝塔「SSL」）----
+        ("ssl_list","列出 SSL 证书","{}"),
+        ("ssl_import","导入证书，参数 name/fullchain/privkey","{\"name\":{\"type\":\"string\"},\"fullchain\":{\"type\":\"string\"},\"privkey\":{\"type\":\"string\"}}"),
+        ("ssl_self_signed","生成自签证书，参数 name/domain/days","{\"name\":{\"type\":\"string\"},\"domain\":{\"type\":\"string\"},\"days\":{\"type\":\"number\"}}"),
+        ("ssl_le_issue","申请 Let's Encrypt 证书，参数 name/domain/webroot","{\"name\":{\"type\":\"string\"},\"domain\":{\"type\":\"string\"},\"webroot\":{\"type\":\"string\"}}"),
+        ("ssl_apply","为站点应用证书，参数 site/cert/upgrade(布尔)","{\"site\":{\"type\":\"string\"},\"cert\":{\"type\":\"string\"},\"upgrade\":{\"type\":\"boolean\"}}"),
+        // ---- 运行环境（对标宝塔「软件商店/环境」）----
+        ("env_status","查看运行环境总览（nginx/mysql/redis/php/node/docker/python/go）","{}"),
+        ("env_install","一键安装运行时，参数 id(nginx/mysql/redis/php/node/docker/go)","{\"id\":{\"type\":\"string\"}}"),
+        ("env_service","启停运行时服务，参数 id 与 action(start/stop/restart)","{\"id\":{\"type\":\"string\"},\"action\":{\"type\":\"string\"}}"),
+        // ---- 备份（对标宝塔「定时备份」）----
+        ("backup_list","列出备份文件","{}"),
+        ("backup_dir","备份目录，参数 path 与 keep(保留份数)","{\"path\":{\"type\":\"string\"},\"keep\":{\"type\":\"number\"}}"),
+        ("backup_run","执行全量备份（目录+数据库）","{}"),
+        ("backup_schedule","设置定时备份，参数 cron(5段cron)","{\"cron\":{\"type\":\"string\"}}"),
+        ("backup_schedule_remove","移除定时备份","{}"),
+        ("backup_cloud","上传备份到云存储(FTP)，参数 file","{\"file\":{\"type\":\"string\"}}"),
+        // ---- 安全（对标宝塔付费「安全/WAF」）----
+        ("security_bans","列出已封禁 IP","{}"),
+        ("security_hardening","查看系统加固状态（SSH）","{}"),
+        ("security_waf_status","查看 WAF 状态","{}"),
+        ("security_ban","封禁 IP，参数 ip","{\"ip\":{\"type\":\"string\"}}"),
+        ("security_unban","解封 IP，参数 ip","{\"ip\":{\"type\":\"string\"}}"),
+        ("security_brute","扫描暴力破解并自动封禁，参数 threshold(默认5)","{\"threshold\":{\"type\":\"number\"}}"),
+        ("security_waf_enable","启用 WAF，参数 rps/burst","{\"rps\":{\"type\":\"number\"},\"burst\":{\"type\":\"number\"}}"),
+        ("security_waf_disable","关闭 WAF","{}"),
+        ("security_harden","SSH 加固，参数 no_root_pass/no_password(布尔)","{\"no_root_pass\":{\"type\":\"boolean\"},\"no_password\":{\"type\":\"boolean\"}}"),
+        ("security_unharden","撤销 SSH 加固","{}"),
+        // ---- IotaPanel 兼容插件（独立进程插件）----
+        ("iota_list","列出 IotaPanel 兼容插件","{}"),
+        ("iota_status","查看插件运行状态，参数 name","{\"name\":{\"type\":\"string\"}}"),
+        ("iota_log","查看插件日志，参数 name 与 n(行数)","{\"name\":{\"type\":\"string\"},\"n\":{\"type\":\"number\"}}"),
+        ("iota_start","启动插件，参数 name","{\"name\":{\"type\":\"string\"}}"),
+        ("iota_stop","停止插件，参数 name","{\"name\":{\"type\":\"string\"}}"),
+        ("iota_restart","重启插件，参数 name","{\"name\":{\"type\":\"string\"}}"),
+        ("iota_uninstall","卸载插件，参数 name","{\"name\":{\"type\":\"string\"}}"),
+        ("iota_keepalive","设置插件保活，参数 name 与 on(布尔)","{\"name\":{\"type\":\"string\"},\"on\":{\"type\":\"boolean\"}}"),
+        ("iota_install_url","从 URL 安装插件，参数 url 与 sha256(可选)","{\"url\":{\"type\":\"string\"},\"sha256\":{\"type\":\"string\"}}"),
+        // ---- 插件商店 & KV ----
+        ("plugin_store","列出插件商店软件","{}"),
+        ("plugin_store_install","从商店安装插件，参数 id","{\"id\":{\"type\":\"string\"}}"),
+        ("plugin_kv","列出插件 KV 存储","{}"),
+        ("plugin_enable","启用插件，参数 name","{\"name\":{\"type\":\"string\"}}"),
+        ("plugin_disable","禁用插件，参数 name","{\"name\":{\"type\":\"string\"}}"),
+        // ---- 监控 / 资源排行 ----
+        ("resource_top","资源占用排行（按 CPU/内存前 n），参数 n","{\"n\":{\"type\":\"number\"}}"),
+        ("monitor_snapshot","查看历史监控数据（最近 n 个采样点），参数 n","{\"n\":{\"type\":\"number\"}}"),
+        ("shop_list","列出软件商店应用","{}"),
+        ("log_follow","增量查看日志，参数 file 与 pos(字节偏移)","{\"file\":{\"type\":\"string\"},\"pos\":{\"type\":\"number\"}}"),
     ];
     let mut item = Vec::new();
     for (name, desc, schema) in tools {
@@ -149,11 +219,50 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
     let content = arg_str(&args, "content");
     let file = arg_str(&args, "file");
     let n: usize = arg_str(&args, "n").parse().unwrap_or(20);
+    let pos: u64 = arg_str(&args, "pos").parse().unwrap_or(0);
     let server_name = arg_str(&args, "server_name");
     let listen = arg_str(&args, "listen");
     let target = arg_str(&args, "target");
     let fname = arg_str(&args, "name");
     let enable = arg_str(&args, "enable") == "true" || arg_str(&args, "enable") == "1";
+    // 网站
+    let domain = arg_str(&args, "domain");
+    let php = arg_str(&args, "php") == "true" || arg_str(&args, "php") == "1";
+    let php_version = arg_str(&args, "php_version");
+    let drop_root = arg_str(&args, "drop_root") == "true" || arg_str(&args, "drop_root") == "1";
+    let kind = arg_str(&args, "kind");
+    // 数据库
+    let dbname = arg_str(&args, "name");
+    let charset = arg_str(&args, "charset");
+    let dbuser = arg_str(&args, "user");
+    let dbpass = arg_str(&args, "pass");
+    let host = arg_str(&args, "host");
+    let db = arg_str(&args, "db");
+    let password = arg_str(&args, "password");
+    // SSL
+    let fullchain = arg_str(&args, "fullchain");
+    let privkey = arg_str(&args, "privkey");
+    let cert = arg_str(&args, "cert");
+    let site = arg_str(&args, "site");
+    let days: u32 = arg_str(&args, "days").parse().unwrap_or(365);
+    let webroot = arg_str(&args, "webroot");
+    let upgrade = arg_str(&args, "upgrade") == "true" || arg_str(&args, "upgrade") == "1";
+    // 环境 / 备份 / 安全
+    let env_id = arg_str(&args, "id");
+    let cron = arg_str(&args, "cron");
+    // cron 与 file 已复用上面 command/file 变量？file 单独解析：
+    // 备份目录 path 复用 path；keep
+    let keep: u32 = arg_str(&args, "keep").parse().unwrap_or(5);
+    // 安全
+    let ip = arg_str(&args, "ip");
+    let threshold: u32 = arg_str(&args, "threshold").parse().unwrap_or(5);
+    let rps: u32 = arg_str(&args, "rps").parse().unwrap_or(20);
+    let burst: u32 = arg_str(&args, "burst").parse().unwrap_or(40);
+    let no_root_pass = arg_str(&args, "no_root_pass") == "true" || arg_str(&args, "no_root_pass") == "1";
+    let no_password = arg_str(&args, "no_password") == "true" || arg_str(&args, "no_password") == "1";
+    // iota
+    let url = arg_str(&args, "url");
+    let sha256 = arg_str(&args, "sha256");
 
     let (ok, text) = match name.as_str() {
         "system_overview" => (true, crate::system::system_json(&state.monitor)),
@@ -218,6 +327,104 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
             let (o, m) = crate::nginx::nginx_delete(&fname);
             (o, m)
         }
+        "nginx_reload" => crate::nginx::nginx_reload_endpoint(),
+        "autostart" => crate::nginx::autostart_action(&fname, enable),
+        // ---- 网站 ----
+        "website_list" => (true, crate::website::website_list_json()),
+        "website_create" => {
+            let (o, m) = crate::website::website_create(&fname, &domain, &listen, php, &php_version);
+            (o, m)
+        }
+        "website_toggle" => {
+            let (o, m) = crate::website::website_toggle(&fname, enable);
+            (o, m)
+        }
+        "website_delete" => {
+            let (o, m) = crate::website::website_delete(&fname, drop_root);
+            (o, m)
+        }
+        "website_rewrite" => {
+            let (o, m) = crate::website::rewrite_apply(&fname, &kind);
+            (o, m)
+        }
+        // ---- 数据库 ----
+        "db_status" => {
+            let installed = crate::db::installed(&state.cfg.database);
+            let running = installed && crate::db::server_running(&state.cfg.database);
+            (true, format!(
+                "{{\"ok\":true,\"installed\":{},\"running\":{},\"user\":\"{}\"}}",
+                installed, running, json::jesc(&state.cfg.database.user)
+            ))
+        }
+        "db_databases" => {
+            let (o, m) = crate::db::databases(&state.cfg.database);
+            (o, format!("{{\"ok\":{},\"list\":{}}}", o, m))
+        }
+        "db_users" => {
+            let (o, m) = crate::db::users(&state.cfg.database);
+            (o, format!("{{\"ok\":{},\"list\":{}}}", o, m))
+        }
+        "db_backups" => (true, db_backups_text(&state.cfg)),
+        "db_create_db" => crate::db::create_db(&state.cfg.database, &dbname, &charset),
+        "db_drop_db" => crate::db::drop_db(&state.cfg.database, &dbname),
+        "db_create_user" => crate::db::create_user(&state.cfg.database, &dbuser, &dbpass, &host),
+        "db_drop_user" => crate::db::drop_user(&state.cfg.database, &dbuser, &host),
+        "db_grant" => crate::db::grant(&state.cfg.database, &db, &dbuser, &host),
+        "db_backup" => crate::db::backup(&state.cfg.database, &db, &state.cfg.database.backup_dir),
+        "db_restore" => crate::db::restore(&state.cfg.database, &db, &file),
+        "db_reset_root" => crate::db::reset_root_password(&state.cfg.database, &password),
+        // ---- SSL ----
+        "ssl_list" => (true, crate::ssl::list_json(&state.cfg.certs)),
+        "ssl_import" => crate::ssl::import(&state.cfg.certs, &fname, &fullchain, &privkey),
+        "ssl_self_signed" => crate::ssl::self_signed(&state.cfg.certs, &fname, &domain, days),
+        "ssl_le_issue" => crate::ssl::le_issue(&state.cfg.certs, &fname, &domain, &webroot),
+        "ssl_apply" => crate::ssl::apply(&state.cfg.certs, &site, &cert, upgrade),
+        // ---- 运行环境 ----
+        "env_status" => (true, crate::env::status_json()),
+        "env_install" => crate::env::install(&env_id),
+        "env_service" => crate::env::service(&env_id, &action),
+        // ---- 备份 ----
+        "backup_list" => (true, crate::backup::list_json(&state.cfg)),
+        "backup_dir" => crate::backup::dir_backup(&path, &state.cfg.backup.dir, keep),
+        "backup_run" => crate::backup::run(&state.cfg),
+        "backup_schedule" => crate::backup::schedule(&state.cfg, &cron),
+        "backup_schedule_remove" => crate::backup::schedule_remove(),
+        "backup_cloud" => crate::backup::cloud_upload(&file),
+        // ---- 安全 ----
+        "security_bans" => (true, crate::security::bans_json()),
+        "security_hardening" => (true, crate::security::hardening_status()),
+        "security_waf_status" => (true, crate::extra::waf_status_json(&state.cfg)),
+        "security_ban" => crate::security::ban_ip(&ip),
+        "security_unban" => crate::security::unban_ip(&ip),
+        "security_brute" => (true, crate::security::brute_scan(threshold)),
+        "security_waf_enable" => crate::security::waf_apply(rps, burst),
+        "security_waf_disable" => crate::security::waf_disable(),
+        "security_harden" => crate::security::harden_ssh(no_root_pass, no_password),
+        "security_unharden" => crate::security::unharden_ssh(),
+        // ---- IotaPanel 兼容插件 ----
+        "iota_list" => (true, state.iota.list_json()),
+        "iota_status" => (true, state.iota.status_json(&fname)),
+        "iota_log" => (true, state.iota.log_tail_json(&fname, n)),
+        "iota_start" => match state.iota.start(&fname) {
+            Ok((_, p)) => (true, format!("插件 {} 已启动（端口 {}）", fname, p)),
+            Err(e) => (false, e),
+        },
+        "iota_stop" => state.iota.stop(&fname),
+        "iota_restart" => state.iota.restart(&fname),
+        "iota_uninstall" => state.iota.uninstall(&fname),
+        "iota_keepalive" => state.iota.set_keepalive(&fname, enable),
+        "iota_install_url" => state.iota.install_url(&url, &sha256),
+        // ---- 插件商店 / KV / 启停 ----
+        "plugin_store" => (true, state.plugins.store_list_json(&state.cfg)),
+        "plugin_store_install" => state.plugins.store_install(&env_id, &state.cfg),
+        "plugin_kv" => (true, state.plugins.kv_list_json()),
+        "plugin_enable" => state.plugins.set_enabled(&fname, true),
+        "plugin_disable" => state.plugins.set_enabled(&fname, false),
+        // ---- 监控 / 资源排行 ----
+        "resource_top" => (true, crate::extra::resources_top_json(n)),
+        "monitor_snapshot" => (true, crate::monitor::monitor_json(n)),
+        "shop_list" => (true, state.shop.list_json(&state.cfg)),
+        "log_follow" => (true, crate::extra::log_follow_json(&file, pos)),
         _ => plugin_or_unknown(state, name.as_str(), &args),
     };
     let result = format!(
@@ -410,4 +617,26 @@ fn unescape_str(s: &str) -> String {
         }
     }
     out
+}
+
+/// 列出数据库备份文件（对标 api.rs 的 db_backups_json）。
+fn db_backups_text(cfg: &crate::config::Config) -> String {
+    let dir = &cfg.database.backup_dir;
+    let mut files: Vec<(String, u64)> = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            if e.path().extension().map_or(false, |x| x == "gz") {
+                let name = e.file_name().to_string_lossy().into_owned();
+                let size = e.metadata().map(|m| m.len()).unwrap_or(0);
+                files.push((name, size));
+            }
+        }
+    }
+    files.sort();
+    let arr = files
+        .iter()
+        .map(|(n, s)| format!("{{\"name\":\"{}\",\"size\":{}}}", json::jesc(n), s))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("{{\"ok\":true,\"dir\":\"{}\",\"list\":[{}]}}", json::jesc(dir), arr)
 }

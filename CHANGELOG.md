@@ -20,6 +20,10 @@
 - **备份前端**（新「备份」tab）：全量备份 / 目录备份 / 定时备份 / 移除 / 云上传
 - **云备份上传**（`src/backup.rs` 新增 `cloud_upload`，`/api/backup/cloud`）：经 `lftp` 推送到远程 FTP，连接信息用 `VPANEL_FTP_HOST/USER/PASS/DIR` 环境变量，未配置时给出引导提示
 - **安全加固前端**（新「安全」tab）：SSH 加固/撤销、WAF 开关、已封禁 IP、暴力破解扫描封禁
+- **MCP 全量工具化**（`src/mcp.rs`）——把上述所有宝塔能力以 Model Context Protocol 工具暴露，供 Claude/Cursor 等 AI 客户端通过 `POST /mcp` 调用：
+  - 新增 60 个内置工具，覆盖 网站 / 数据库 / SSL / 运行环境 / 备份 / 安全(WAF+加固) / IotaPanel 插件 / 插件商店 / 监控快照 / 资源排行 / 软件商店 / 日志增量
+  - `tools/list` 自动产出每工具的 `inputSchema`（参数类型按字符串/数字/布尔映射）
+  - 复用现有 `db/databases` 等纯函数，工具派发 `tools/call` 与 `/api/*` 同源，无新增常驻状态
 
 ### 验证
 - 单测：36/36 通过（含建站 PHP 版本 socket 映射断言）
