@@ -29,10 +29,25 @@
   - 新增磁盘占用总览 `disk_usage`（df -Pk 解析）
   - 新增文件操作 `file_mkdir` 创建目录、`file_rename` 重命名/移动（`src/extra.rs` 新增 `mkdir`/`rename`/`disk_usage_json`/`docker_containers_json`/`docker_action`）
   - 内置 MCP 工具扩充至 66 个
+- **运维工具箱大爆发**（新模块 `src/ops.rs`，内置 MCP 工具 66 → 133）
+  - 一次性新增 **67 个**纯函数工具，全部「按需执行、随求即释」、无常驻状态，实测 RSS 仍 ≈ **6.0MB**（≤10MB 预算内）
+  - **网络诊断**：`ping` / `tcp_ping` / `dns_lookup` / `http_head` / `listener_ports` / `port_check` / `reverse_dns`
+  - **系统纵深**：`cpu_info` / `cpu_usage` / `mem_info` / `swap_info` / `loadavg` / `net_io` / `disk_inodes` / `os_release` / `kernel_info`
+  - **文件系统深度**：`ls_long` / `dir_size` / `file_count` / `file_search` / `file_chmod` / `zip_archive` / `zip_extract` / `file_head` / `file_size`
+  - **进程/服务**：`process_by_name` / `process_detail` / `systemd_units` / `systemd_action`
+  - **软件包(apt)**：`apt_update` / `apt_upgrade` / `apt_install` / `apt_remove` / `apt_list_installed` / `pkg_installed`
+  - **计划任务(cron)**：`cron_list` / `cron_add` / `cron_remove` / `cron_system`
+  - **运行时版本**：`php_version` / `node_version` / `go_version` / `python_version` / `mysql_version` / `php_fpm_sockets`
+  - **数据库深化**：`db_sizes` / `mysql_status` / `mysql_ping`
+  - **SSL 深化**：`cert_view` / `cert_expiry`（证书剩余天数）
+  - **Docker 深化**：`docker_images` / `docker_stats` / `docker_prune` / `docker_info`
+  - **日志**：`dmesg_tail` / `journal_tail` / `nginx_error_tail` / `nginx_access_tail` / `mysql_error_tail` / `auth_log_tail`
+  - **用户/杂项**：`users_list` / `whoami` / `random_password` / `sha256` / `base64_encode` / `base64_decode` / `uuid` / `panel_about`
+  - 新增依赖 `rand` / `sha2`（minimal features，仅用作随机/哈希），随添加随用小体积实现
 
 ### 验证
 - 单测：36/36 通过（含建站 PHP 版本 socket 映射断言）
-- 实测内存：debug 构建常驻 RSS ≈ 6.2MB（含新前端）
+- 实测内存：debug 构建常驻 RSS ≈ 6.0MB（新增 67 个 ops 工具后仍在 ≤10MB 预算内）
 
 ---
 

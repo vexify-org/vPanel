@@ -157,6 +157,88 @@ fn tools_list(id: Option<i64>, state: &State) -> String {
         ("file_rename","重命名/移动文件，参数 src 与 dst","{\"src\":{\"type\":\"string\"},\"dst\":{\"type\":\"string\"}}"),
         ("docker_containers","列出所有 Docker 容器","{}"),
         ("docker_action","对容器执行操作，参数 id 与 action(start/stop/restart)","{\"id\":{\"type\":\"string\"},\"action\":{\"type\":\"string\"}}"),
+        // ===== ops 运维工具箱（对标宝塔/类运维工具）=====
+        // 网络诊断
+        ("ping","Ping 探测主机，参数 host/count","{\"host\":{\"type\":\"string\"},\"count\":{\"type\":\"number\"}}"),
+        ("tcp_ping","TCP 端口连通性探测，参数 host/port/count","{\"host\":{\"type\":\"string\"},\"port\":{\"type\":\"number\"},\"count\":{\"type\":\"number\"}}"),
+        ("dns_lookup","DNS 解析查询，参数 host","{\"host\":{\"type\":\"string\"}}"),
+        ("http_head","HTTP 响应头探测，参数 url","{\"url\":{\"type\":\"string\"}}"),
+        ("listener_ports","本机所有监听端口(ss/netstat)","{}"),
+        ("port_check","指定端口是否在监听，参数 port","{\"port\":{\"type\":\"number\"}}"),
+        ("reverse_dns","反向解析 IP，参数 ip","{\"ip\":{\"type\":\"string\"}}"),
+        // 系统纵深
+        ("cpu_info","CPU 型号与核心数","{}"),
+        ("cpu_usage","当前 CPU 使用率(采样1秒)","{}"),
+        ("mem_info","内存总/已用/可用","{}"),
+        ("swap_info","交换分区信息","{}"),
+        ("loadavg","系统负载 1/5/15","{}"),
+        ("net_io","网络吞吐 KB/s(采样1秒)","{}"),
+        ("disk_inodes","磁盘 inode 使用(df -i)","{}"),
+        ("os_release","操作系统发行版","{}"),
+        ("kernel_info","内核/主机名/架构/运行时长","{}"),
+        // 文件系统深度
+        ("ls_long","长格式列出目录，参数 path","{\"path\":{\"type\":\"string\"}}"),
+        ("dir_size","目录占用总大小，参数 path","{\"path\":{\"type\":\"string\"}}"),
+        ("file_count","统计目录内文件数，参数 path","{\"path\":{\"type\":\"string\"}}"),
+        ("file_search","递归搜索文件，参数 path(目录)/pattern","{\"path\":{\"type\":\"string\"},\"pattern\":{\"type\":\"string\"}}"),
+        ("file_chmod","修改文件权限，参数 path/mode","{\"path\":{\"type\":\"string\"},\"mode\":{\"type\":\"string\"}}"),
+        ("zip_archive","打包 tar.gz，参数 src/dst","{\"src\":{\"type\":\"string\"},\"dst\":{\"type\":\"string\"}}"),
+        ("zip_extract","解压 tar.gz，参数 file/dest","{\"file\":{\"type\":\"string\"},\"dest\":{\"type\":\"string\"}}"),
+        ("file_head","文件头部 N 行，参数 path/n","{\"path\":{\"type\":\"string\"},\"n\":{\"type\":\"number\"}}"),
+        ("file_size","文件字节大小，参数 path","{\"path\":{\"type\":\"string\"}}"),
+        // 进程
+        ("process_by_name","按名字查找进程，参数 name","{\"name\":{\"type\":\"string\"}}"),
+        ("process_detail","单进程详情，参数 pid","{\"pid\":{\"type\":\"number\"}}"),
+        // 服务 / systemd
+        ("systemd_units","列出 systemd 服务单元","{}"),
+        ("systemd_action","对单元执行动作，参数 unit/action(start/stop/restart/reload/enable/disable)","{\"unit\":{\"type\":\"string\"},\"action\":{\"type\":\"string\"}}"),
+        // 软件包(apt)
+        ("apt_update","更新软件源索引","{}"),
+        ("apt_upgrade","升级所有软件","{}"),
+        ("apt_install","安装软件，参数 pkg","{\"pkg\":{\"type\":\"string\"}}"),
+        ("apt_remove","移除软件，参数 pkg","{\"pkg\":{\"type\":\"string\"}}"),
+        ("apt_list_installed","已安装软件列表(dpkg)","{}"),
+        ("pkg_installed","软件是否已安装，参数 pkg","{\"pkg\":{\"type\":\"string\"}}"),
+        // 计划任务
+        ("cron_list","列出当前用户 crontab","{}"),
+        ("cron_add","追加 cron 任务，参数 schedule/command","{\"schedule\":{\"type\":\"string\"},\"command\":{\"type\":\"string\"}}"),
+        ("cron_remove","移除含关键字的 cron 行，参数 keyword","{\"keyword\":{\"type\":\"string\"}}"),
+        ("cron_system","系统级 crontab 与 /etc/cron.d","{}"),
+        // 运行时版本
+        ("php_version","PHP 版本","{}"),
+        ("node_version","Node.js 版本","{}"),
+        ("go_version","Go 版本","{}"),
+        ("python_version","Python 版本","{}"),
+        ("mysql_version","MySQL 客户端版本","{}"),
+        ("php_fpm_sockets","已安装的 PHP-FPM socket 列表","{}"),
+        // 数据库深化
+        ("db_sizes","各数据库大小(information_schema)","{}"),
+        ("mysql_status","MySQL 运行状态(uptime/线程/版本)","{}"),
+        ("mysql_ping","MySQL 连通性检查","{}"),
+        // SSL 深化
+        ("cert_view","查看证书明细(subject/issuer/有效期)，参数 name","{\"name\":{\"type\":\"string\"}}"),
+        ("cert_expiry","证书剩余天数，参数 name","{\"name\":{\"type\":\"string\"}}"),
+        // Docker 深化
+        ("docker_images","列出 Docker 镜像","{}"),
+        ("docker_stats","容器实时占用(CPU/内存)","{}"),
+        ("docker_prune","清理未使用 Docker 资源","{}"),
+        ("docker_info","Docker 版本信息","{}"),
+        // 日志
+        ("dmesg_tail","内核日志末尾，参数 n","{\"n\":{\"type\":\"number\"}}"),
+        ("journal_tail","systemd 单元日志，参数 unit/n","{\"unit\":{\"type\":\"string\"},\"n\":{\"type\":\"number\"}}"),
+        ("nginx_error_tail","Nginx 错误日志末尾，参数 n","{\"n\":{\"type\":\"number\"}}"),
+        ("nginx_access_tail","Nginx 访问日志末尾，参数 n","{\"n\":{\"type\":\"number\"}}"),
+        ("mysql_error_tail","MySQL 错误日志末尾，参数 n","{\"n\":{\"type\":\"number\"}}"),
+        ("auth_log_tail","SSH 认证日志末尾，参数 n","{\"n\":{\"type\":\"number\"}}"),
+        // 用户 / 杂项
+        ("users_list","列出系统用户(/etc/passwd)","{}"),
+        ("whoami","当前身份","{}"),
+        ("random_password","生成随机强密码，参数 len","{\"len\":{\"type\":\"number\"}}"),
+        ("sha256","计算 SHA-256，参数 text","{\"text\":{\"type\":\"string\"}}"),
+        ("base64_encode","Base64 编码，参数 text","{\"text\":{\"type\":\"string\"}}"),
+        ("base64_decode","Base64 解码，参数 enc","{\"enc\":{\"type\":\"string\"}}"),
+        ("uuid","生成随机 UUID","{}"),
+        ("panel_about","面板自述(版本/内存)","{}"),
     ];
     let mut item = Vec::new();
     for (name, desc, schema) in tools {
@@ -228,6 +310,19 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
     // 文件操作 / 容器 / 磁盘
     let src = arg_str(&args, "src");
     let dst = arg_str(&args, "dst");
+    // ops 工具箱（host/url/ip/schedule 已在下方其它分组声明，避免遮蔽）
+    let count: u32 = arg_str(&args, "count").parse().unwrap_or(0);
+    let tport: u32 = arg_str(&args, "port").parse().unwrap_or(0);
+    let mode = arg_str(&args, "mode");
+    let pattern = arg_str(&args, "pattern");
+    let unit = arg_str(&args, "unit");
+    let pkg = arg_str(&args, "pkg");
+    let keyword = arg_str(&args, "keyword");
+    let tpid: u32 = arg_str(&args, "pid").parse().unwrap_or(0);
+    let dest = arg_str(&args, "dest");
+    let len: u32 = arg_str(&args, "len").parse().unwrap_or(0);
+    let text = arg_str(&args, "text");
+    let enc = arg_str(&args, "enc");
     let server_name = arg_str(&args, "server_name");
     let listen = arg_str(&args, "listen");
     let target = arg_str(&args, "target");
@@ -438,6 +533,88 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
         "file_rename" => crate::extra::rename(&src, &dst),
         "docker_containers" => (true, crate::extra::docker_containers_json()),
         "docker_action" => crate::extra::docker_action(&fname, &action),
+        // ===== ops 运维工具箱 =====
+        // 网络诊断
+        "ping" => (true, crate::ops::ping(&host, count)),
+        "tcp_ping" => (true, crate::ops::tcp_ping(&host, tport, count)),
+        "dns_lookup" => (true, crate::ops::dns_lookup(&host)),
+        "http_head" => (true, crate::ops::http_head(&url)),
+        "listener_ports" => (true, crate::ops::listener_ports()),
+        "port_check" => (true, crate::ops::port_check(tport)),
+        "reverse_dns" => (true, crate::ops::reverse_dns(&ip)),
+        // 系统纵深
+        "cpu_info" => (true, crate::ops::cpu()),
+        "cpu_usage" => (true, crate::ops::cpu_usage()),
+        "mem_info" => (true, crate::ops::mem_info()),
+        "swap_info" => (true, crate::ops::swap_info()),
+        "loadavg" => (true, crate::ops::loadavg()),
+        "net_io" => (true, crate::ops::net_io()),
+        "disk_inodes" => (true, crate::ops::disk_inodes()),
+        "os_release" => (true, crate::ops::os_release()),
+        "kernel_info" => (true, crate::ops::kernel_info()),
+        // 文件系统深度
+        "ls_long" => (true, crate::ops::ls_long(&path)),
+        "dir_size" => (true, crate::ops::dir_size(&path)),
+        "file_count" => (true, crate::ops::file_count(&path)),
+        "file_search" => (true, crate::ops::file_search(&path, &pattern)),
+        "file_chmod" => crate::ops::file_chmod(&path, &mode),
+        "zip_archive" => crate::ops::zip_archive(&src, &dst),
+        "zip_extract" => crate::ops::zip_extract(&file, &dest),
+        "file_head" => (true, crate::ops::file_head(&path, n)),
+        "file_size" => (true, crate::ops::file_size(&path)),
+        // 进程
+        "process_by_name" => (true, crate::ops::process_by_name(&fname)),
+        "process_detail" => (true, crate::ops::process_detail(tpid)),
+        // 服务 / systemd
+        "systemd_units" => (true, crate::ops::systemd_units()),
+        "systemd_action" => crate::ops::systemd_action(&unit, &action),
+        // 软件包(apt)
+        "apt_update" => crate::ops::apt_update(),
+        "apt_upgrade" => crate::ops::apt_upgrade(),
+        "apt_install" => crate::ops::apt_install(&pkg),
+        "apt_remove" => crate::ops::apt_remove(&pkg),
+        "apt_list_installed" => (true, crate::ops::apt_list_installed()),
+        "pkg_installed" => (true, crate::ops::pkg_installed(&pkg)),
+        // 计划任务
+        "cron_list" => (true, crate::ops::cron_list()),
+        "cron_add" => crate::ops::cron_add(&schedule, &command),
+        "cron_remove" => crate::ops::cron_remove(&keyword),
+        "cron_system" => (true, crate::ops::cron_system()),
+        // 运行时版本
+        "php_version" => (true, crate::ops::php_version()),
+        "node_version" => (true, crate::ops::node_version()),
+        "go_version" => (true, crate::ops::go_version()),
+        "python_version" => (true, crate::ops::python_version()),
+        "mysql_version" => (true, crate::ops::mysql_version()),
+        "php_fpm_sockets" => (true, crate::ops::php_fpm_sockets()),
+        // 数据库深化
+        "db_sizes" => crate::ops::db_sizes(&state.cfg.database),
+        "mysql_status" => crate::ops::mysql_status(&state.cfg.database),
+        "mysql_ping" => (true, crate::ops::mysql_ping(&state.cfg.database)),
+        // SSL 深化
+        "cert_view" => crate::ops::cert_view(&fname, &state.cfg.certs),
+        "cert_expiry" => (true, crate::ops::cert_expiry(&fname, &state.cfg.certs)),
+        // Docker 深化
+        "docker_images" => (true, crate::ops::docker_images()),
+        "docker_stats" => (true, crate::ops::docker_stats()),
+        "docker_prune" => crate::ops::docker_prune(),
+        "docker_info" => (true, crate::ops::docker_info_json()),
+        // 日志
+        "dmesg_tail" => (true, crate::ops::dmesg_tail(n)),
+        "journal_tail" => (true, crate::ops::journal_tail(&unit, n)),
+        "nginx_error_tail" => (true, crate::ops::nginx_error_tail(n)),
+        "nginx_access_tail" => (true, crate::ops::nginx_access_tail(n)),
+        "mysql_error_tail" => (true, crate::ops::mysql_error_tail(n)),
+        "auth_log_tail" => (true, crate::ops::auth_log_tail(n)),
+        // 用户 / 杂项
+        "users_list" => (true, crate::ops::users_list()),
+        "whoami" => (true, crate::ops::whoami()),
+        "random_password" => (true, crate::ops::random_password(len)),
+        "sha256" => (true, crate::ops::sha256(&text)),
+        "base64_encode" => (true, crate::ops::base64_encode(&text)),
+        "base64_decode" => (true, crate::ops::base64_decode(&enc)),
+        "uuid" => (true, crate::ops::uuid()),
+        "panel_about" => (true, crate::ops::panel_about()),
         _ => plugin_or_unknown(state, name.as_str(), &args),
     };
     let result = format!(

@@ -16,6 +16,9 @@ serde_json = "1"
 portable-pty = "0.8"
 sha1 = "0.10"
 base64 = "0.22"
+# 运维工具箱（密码/随机、哈希、UUID）
+rand = "0.8"
+sha2 = "0.10"
 # 内置 HTTPS：TLS 终结（自签 / 已有证书），对齐 iotapanel 的 https-front。
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rustls-pemfile = "2"

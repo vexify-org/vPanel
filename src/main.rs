@@ -19,6 +19,7 @@ mod lang;
 mod mcp;
 mod monitor;
 mod nginx;
+mod ops;
 mod panel;
 mod plugins;
 mod shop;
