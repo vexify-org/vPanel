@@ -6,17 +6,23 @@
 
 mod api;
 mod auth;
+mod backup;
 mod config;
 mod ctl;
+mod db;
+mod env;
 mod extra;
 mod http;
 mod json;
 mod lang;
 mod mcp;
+mod monitor;
 mod nginx;
 mod panel;
 mod plugins;
 mod shop;
+mod ssl;
+mod security;
 mod system;
 mod term;
 mod tls;
@@ -59,6 +65,9 @@ fn main() -> ExitCode {
         }
         Some("uninstall") => {
             return cli_uninstall();
+        }
+        Some("backup") => {
+            return cli_backup();
         }
         _ => {}
     }
@@ -234,6 +243,26 @@ fn cli_uninstall() -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// 手动 / 定时执行全量备份（供 crontab 调 `panel backup`）。
+fn cli_backup() -> ExitCode {
+    let cfg_arg = std::env::args().nth(2);
+    let cfg = match cfg_arg {
+        Some(p) => config::Config::load(&p),
+        None => config::Config::auto_find().0,
+    };
+    let (ok, msg) = backup::run(&cfg);
+    println!("{}", msg);
+    exit_code(ok)
+}
+
+fn exit_code(ok: bool) -> ExitCode {
+    if ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
 fn print_usage() {
     println!(
         "vPanel {} — 极简、低常驻内存的 HTTP 面板\n
@@ -245,6 +274,7 @@ fn print_usage() {
   panel restart             重启后台进程
   panel log [-n 200]        查看最近日志
   panel status              查看当前状态
+  panel backup              手动执行一次全量备份（目录 + 数据库）
   panel uninstall           停止并清理运行时文件
   panel version             显示版本
   panel help                显示本帮助",

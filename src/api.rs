@@ -81,6 +81,21 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
         }
         target if target.starts_with("/api/plugin/") => plugin_call(target, body, state),
         "/api/shop" => state.shop.list_json(&state.cfg),
+        "/api/db/status" => db_status_json(&state.cfg),
+        "/api/db/databases" => dbj2(crate::db::databases(&state.cfg.database)),
+        "/api/db/users" => dbj2(crate::db::users(&state.cfg.database)),
+        "/api/db/backups" => db_backups_json(&state.cfg),
+        "/api/ssl" => crate::ssl::list_json(&state.cfg.certs),
+        "/api/env" => crate::env::status_json(),
+        "/api/backup" => crate::backup::list_json(&state.cfg),
+        "/api/security/bans" => crate::security::bans_json(),
+        "/api/security/hardening" => crate::security::hardening_status(),
+        "/api/security/waf" => crate::extra::waf_status_json(&state.cfg),
+        "/api/monitor" => {
+            let q = question_query(qs);
+            let n: usize = q_get(&q, "n").and_then(|x| x.parse().ok()).unwrap_or(120);
+            crate::monitor::monitor_json(n)
+        }
         "/api/shop/install" => {
             if method != "POST" {
                 err("需要 POST")
@@ -306,8 +321,225 @@ fn action_route(target: &str, body: &[u8], _qs: &str) -> String {
             let (ok, msg) = crate::ctl::task_add(&schedule, &command);
             ok_bool(ok, msg)
         }
+        "/api/db/create_db" => {
+            let name = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            let charset = json::form_get(&fields, "charset").unwrap_or("").trim().to_string();
+            dbj(crate::db::create_db(&state_cfg_database(), &name, &charset))
+        }
+        "/api/db/drop_db" => {
+            let name = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            dbj(crate::db::drop_db(&state_cfg_database(), &name))
+        }
+        "/api/db/create_user" => {
+            let u = json::form_get(&fields, "user").unwrap_or("").trim().to_string();
+            let p = json::form_get(&fields, "pass").unwrap_or("").to_string();
+            let h = json::form_get(&fields, "host").unwrap_or("").trim().to_string();
+            dbj(crate::db::create_user(&state_cfg_database(), &u, &p, &h))
+        }
+        "/api/db/drop_user" => {
+            let u = json::form_get(&fields, "user").unwrap_or("").trim().to_string();
+            let h = json::form_get(&fields, "host").unwrap_or("").trim().to_string();
+            dbj(crate::db::drop_user(&state_cfg_database(), &u, &h))
+        }
+        "/api/db/grant" => {
+            let d = json::form_get(&fields, "db").unwrap_or("").trim().to_string();
+            let u = json::form_get(&fields, "user").unwrap_or("").trim().to_string();
+            let h = json::form_get(&fields, "host").unwrap_or("").trim().to_string();
+            dbj(crate::db::grant(&state_cfg_database(), &d, &u, &h))
+        }
+        "/api/db/backup" => {
+            let d = json::form_get(&fields, "db").unwrap_or("").trim().to_string();
+            let dir = &state_cfg_database().backup_dir;
+            dbj(crate::db::backup(&state_cfg_database(), &d, dir))
+        }
+        "/api/db/restore" => {
+            let d = json::form_get(&fields, "db").unwrap_or("").trim().to_string();
+            let f = json::form_get(&fields, "file").unwrap_or("").trim().to_string();
+            dbj(crate::db::restore(&state_cfg_database(), &d, &f))
+        }
+        "/api/ssl/import" => {
+            let n = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            let fc = json::form_get(&fields, "fullchain").unwrap_or("").to_string();
+            let pk = json::form_get(&fields, "privkey").unwrap_or("").to_string();
+            dbj(crate::ssl::import(&state_certs(), &n, &fc, &pk))
+        }
+        "/api/ssl/self_signed" => {
+            let n = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            let d = json::form_get(&fields, "domain").unwrap_or("").trim().to_string();
+            let days: u32 = json::form_get(&fields, "days").and_then(|x| x.parse().ok()).unwrap_or(365);
+            dbj(crate::ssl::self_signed(&state_certs(), &n, &d, days))
+        }
+        "/api/ssl/le_issue" => {
+            let n = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            let d = json::form_get(&fields, "domain").unwrap_or("").trim().to_string();
+            let wr = json::form_get(&fields, "webroot").unwrap_or("").trim().to_string();
+            dbj(crate::ssl::le_issue(&state_certs(), &n, &d, &wr))
+        }
+        "/api/ssl/apply" => {
+            let site = json::form_get(&fields, "site").unwrap_or("").trim().to_string();
+            let cname = json::form_get(&fields, "cert").unwrap_or("").trim().to_string();
+            let upgrade = json::form_get(&fields, "upgrade").unwrap_or("0").trim()
+                == "1"
+                || json::form_get(&fields, "upgrade").unwrap_or("0").trim() == "true";
+            dbj(crate::ssl::apply(&state_certs(), &site, &cname, upgrade))
+        }
+        "/api/security/ban" => {
+            let ip = json::form_get(&fields, "ip").unwrap_or("").trim().to_string();
+            dbj(crate::security::ban_ip(&ip))
+        }
+        "/api/security/unban" => {
+            let ip = json::form_get(&fields, "ip").unwrap_or("").trim().to_string();
+            dbj(crate::security::unban_ip(&ip))
+        }
+        "/api/security/brute" => {
+            let t: u32 = json::form_get(&fields, "threshold").and_then(|x| x.parse().ok()).unwrap_or(5);
+            String::from(crate::security::brute_scan(t))
+        }
+        "/api/security/waf/enable" => {
+            let rps: u32 = json::form_get(&fields, "rps").and_then(|x| x.parse().ok()).unwrap_or(20);
+            let burst: u32 = json::form_get(&fields, "burst").and_then(|x| x.parse().ok()).unwrap_or(40);
+            dbj(crate::security::waf_apply(rps, burst))
+        }
+        "/api/security/waf/disable" => dbj(crate::security::waf_disable()),
+        "/api/security/harden" => {
+            let nopass = json::form_get(&fields, "no_root_pass").unwrap_or("0").trim() == "1"
+                || json::form_get(&fields, "no_root_pass").unwrap_or("0").trim() == "true";
+            let nopw = json::form_get(&fields, "no_password").unwrap_or("0").trim() == "1"
+                || json::form_get(&fields, "no_password").unwrap_or("0").trim() == "true";
+            dbj(crate::security::harden_ssh(nopass, nopw))
+        }
+        "/api/security/unharden" => dbj(crate::security::unharden_ssh()),
+        "/api/backup/dir" => {
+            let src = json::form_get(&fields, "path").unwrap_or("").trim().to_string();
+            let keep: u32 = json::form_get(&fields, "keep").and_then(|x| x.parse().ok()).unwrap_or(5);
+            let (ok, msg) = crate::backup::dir_backup(&src, &state_cfg_backup().dir, keep);
+            dbj((ok, msg))
+        }
+        "/api/backup/run" => {
+            let (ok, msg) = crate::backup::run(&state_cfg_backup_full());
+            dbj((ok, msg))
+        }
+        "/api/backup/schedule" => {
+            let cron = json::form_get(&fields, "cron").unwrap_or("").trim().to_string();
+            let (ok, msg) = crate::backup::schedule(&state_cfg_backup_full(), &cron);
+            dbj((ok, msg))
+        }
+        "/api/backup/schedule_remove" => dbj(crate::backup::schedule_remove()),
+        "/api/env/install" => {
+            let id = json::form_get(&fields, "id").unwrap_or("").trim().to_string();
+            dbj(crate::env::install(&id))
+        }
+        "/api/env/service" => {
+            let id = json::form_get(&fields, "id").unwrap_or("").trim().to_string();
+            let action = json::form_get(&fields, "action").unwrap_or("").trim().to_string();
+            dbj(crate::env::service(&id, &action))
+        }
         _ => err("未知操作"),
     }
+}
+
+// 下面三个辅助：action_route 拿不到 State，只能依赖常量/线程本地拿到数据库配置。
+// 由于 action_route 无 cfg 上下文，把数据库配置预置到全局（服务启动时注入一次）。
+use std::sync::OnceLock;
+
+fn state_cfg_database() -> &'static crate::config::Database {
+    STATE_DB.get_or_init(|| crate::config::Database::default())
+}
+
+static STATE_DB: OnceLock<crate::config::Database> = OnceLock::new();
+
+/// 服务启动时把配置里的数据库段注入全局，供无 State 的 action_route 使用。
+pub fn db_config_init(cfg: &crate::config::Config) {
+    let _ = STATE_DB.set(cfg.database.clone());
+}
+
+fn state_certs() -> &'static crate::config::Certs {
+    STATE_CERTS.get_or_init(|| crate::config::Certs::default())
+}
+
+static STATE_CERTS: OnceLock<crate::config::Certs> = OnceLock::new();
+
+/// 注入证书配置。
+pub fn certs_config_init(cfg: &crate::config::Config) {
+    let _ = STATE_CERTS.set(cfg.certs.clone());
+}
+
+fn state_cfg_backup() -> &'static crate::config::Backup {
+    STATE_BACKUP.get_or_init(|| crate::config::Backup::default())
+}
+
+static STATE_BACKUP: OnceLock<crate::config::Backup> = OnceLock::new();
+
+/// 注入备份配置。
+pub fn backup_config_init(cfg: &crate::config::Config) {
+    let _ = STATE_BACKUP.set(cfg.backup.clone());
+}
+
+fn state_cfg_backup_full() -> &'static crate::config::Config {
+    STATE_CFG.get_or_init(crate::config::Config::default)
+}
+
+static STATE_CFG: OnceLock<crate::config::Config> = OnceLock::new();
+
+/// 注入完整配置（供 run/schedule 使用 database + backup）。
+pub fn config_init(cfg: &crate::config::Config) {
+    let _ = STATE_CFG.set(cfg.clone());
+}
+
+/// `(bool, String)` -> 结果 JSON。
+fn dbj(r: (bool, String)) -> String {
+    if r.0 {
+        format!("{{\"ok\":true,\"msg\":\"{}\"}}", json::jesc(&r.1))
+    } else {
+        format!("{{\"ok\":false,\"msg\":\"{}\"}}", json::jesc(&r.1))
+    }
+}
+
+/// 数据库列表类：成功时第二项已是 JSON 数组字符串。
+fn dbj2(r: (bool, String)) -> String {
+    if r.0 {
+        format!("{{\"ok\":true,\"data\":{}}}", r.1)
+    } else {
+        format!("{{\"ok\":false,\"msg\":\"{}\"}}", json::jesc(&r.1))
+    }
+}
+
+/// 数据库安装/运行状态。
+fn db_status_json(cfg: &crate::config::Config) -> String {
+    let installed = crate::db::installed(&cfg.database);
+    let running = installed && crate::db::server_running(&cfg.database);
+    format!(
+        "{{\"ok\":true,\"installed\":{},\"running\":{},\"user\":\"{}\"}}",
+        installed,
+        running,
+        json::jesc(&cfg.database.user)
+    )
+}
+
+/// 列出数据库备份文件。
+fn db_backups_json(cfg: &crate::config::Config) -> String {
+    let dir = &cfg.database.backup_dir;
+    let mut files: Vec<(String, u64, u64)> = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            if e.path().extension().map_or(false, |x| x == "gz") {
+                let name = e.file_name().to_string_lossy().into_owned();
+                let size = e.metadata().map(|m| m.len()).unwrap_or(0);
+                let mtime = e.metadata().and_then(|m| m.modified()).ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                files.push((name, size, mtime));
+            }
+        }
+    }
+    files.sort_by(|a, b| b.2.cmp(&a.2));
+    let arr = files
+        .iter()
+        .map(|(n, s, t)| format!("{{\"name\":\"{}\",\"size\":{},\"mtime\":{}}}", json::jesc(n), s, t))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("{{\"ok\":true,\"list\":[{}],\"dir\":\"{}\"}}", arr, json::jesc(dir))
 }
 
 fn ok_bool(ok: bool, msg: String) -> String {

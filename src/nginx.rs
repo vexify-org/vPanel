@@ -7,7 +7,7 @@
 use crate::json;
 
 /// nginx 配置根目录（可被 panel.yml 的 nginx.dir 覆盖）。
-fn conf_dir() -> String {
+pub fn conf_dir() -> String {
     std::env::var("VPANEL_NGINX_DIR")
         .unwrap_or_else(|_| "/etc/nginx".to_string())
 }
@@ -43,11 +43,12 @@ fn run(cmd: &str) -> (bool, String) {
     }
 }
 
-fn nginx_test() -> (bool, String) {
+/// 校验 nginx 配置。（跨模块复用：security WAF / ssl 应用）
+pub fn nginx_test() -> (bool, String) {
     run("nginx -t 2>&1")
 }
 
-fn nginx_reload() -> (bool, String) {
+pub fn nginx_reload() -> (bool, String) {
     run("nginx -s reload 2>&1 || systemctl reload nginx 2>&1")
 }
 
@@ -68,14 +69,15 @@ pub fn nginx_list_json() -> String {
             let base = name.trim_end_matches(conf_ext()).to_string();
             let enabled = std::path::Path::new(&enabled_dir()).join(&name).exists();
             let content = std::fs::read_to_string(ent.path()).unwrap_or_default();
-            let (listen, server_name, proxy_pass) = parse_conf(&content);
+            let (listen, server_name, proxy_pass, ssl) = parse_conf(&content);
             items.push(format!(
-                "{{\"name\":\"{}\",\"enabled\":{},\"listen\":\"{}\",\"server_name\":\"{}\",\"proxy_pass\":\"{}\"}}",
+                "{{\"name\":\"{}\",\"enabled\":{},\"listen\":\"{}\",\"server_name\":\"{}\",\"proxy_pass\":\"{}\",\"ssl\":{}}}",
                 json::jesc(&base),
                 enabled,
                 json::jesc(&listen),
                 json::jesc(&server_name),
-                json::jesc(&proxy_pass)
+                json::jesc(&proxy_pass),
+                ssl
             ));
         }
     }
@@ -83,10 +85,11 @@ pub fn nginx_list_json() -> String {
     format!("{{\"ok\":true,\"basedir\":\"{}\",\"list\":[{}]}}", json::jesc(&conf_dir()), items.join(","))
 }
 
-fn parse_conf(content: &str) -> (String, String, String) {
+fn parse_conf(content: &str) -> (String, String, String, bool) {
     let mut listen = String::new();
     let mut server_name = String::new();
     let mut proxy_pass = String::new();
+    let mut ssl = false;
     for line in content.lines() {
         let t = line.trim();
         if let Some(v) = t.find("server_name") {
@@ -104,12 +107,14 @@ fn parse_conf(content: &str) -> (String, String, String) {
             if let Some(rest) = t.get(v + "proxy_pass ".len()..) {
                 proxy_pass = rest.trim_end_matches(';').trim().to_string();
             }
+        } else if t.starts_with("ssl_certificate ") {
+            ssl = true;
         }
-        if !server_name.is_empty() && !listen.is_empty() && !proxy_pass.is_empty() {
+        if !server_name.is_empty() && !listen.is_empty() && !proxy_pass.is_empty() && ssl {
             break;
         }
     }
-    (listen, server_name, proxy_pass)
+    (listen, server_name, proxy_pass, ssl)
 }
 
 /// 校验站点命名合法（字母数字、连字符、点、下划线）。
@@ -180,6 +185,76 @@ server {
     t.replace("###LISTEN###", listen)
         .replace("###SERVER_NAME###", server_name)
         .replace("###TARGET###", target)
+}
+
+/// 给站点启用 HTTPS：读出现有 server_name / proxy_pass，重写为
+/// 「80 -> 301 跳 https」+「443 ssl」双 server 块，指向传入的证书。
+/// `upgrade` 为真时把 80 也收编为跳转；证书文件需已存在。
+pub fn nginx_ssl(name: &str, cert: &str, key: &str, upgrade: bool) -> (bool, String) {
+    if !available() {
+        return (false, format!("未找到 nginx 配置目录 {}", avail_dir()));
+    }
+    if !valid_name(name) {
+        return (false, "非法的站点名".into());
+    }
+    if !std::path::Path::new(cert).is_file() || !std::path::Path::new(key).is_file() {
+        return (false, "证书或私钥文件不存在".into());
+    }
+    let file = format!("{}/{}.conf", avail_dir(), name);
+    let content = std::fs::read_to_string(&file).unwrap_or_default();
+    let (_, server_name, proxy_pass, _) = parse_conf(&content);
+    if server_name.is_empty() || proxy_pass.is_empty() {
+        return (false, "读取站点 server_name / 反代目标失败".into());
+    }
+    let mut ssl_block = String::new();
+    ssl_block.push_str("server {\n");
+    ssl_block.push_str("    listen 443 ssl;\n");
+    ssl_block.push_str("    http2 on;\n");
+    ssl_block.push_str(&format!("    server_name {};\n", server_name));
+    ssl_block.push_str("    ssl_protocols TLSv1.2 TLSv1.3;\n");
+    ssl_block.push_str("    ssl_ciphers HIGH:!aNULL:!MD5;\n");
+    ssl_block.push_str(&format!("    ssl_certificate {};\n", cert));
+    ssl_block.push_str(&format!("    ssl_certificate_key {};\n", key));
+    ssl_block.push_str("    location / {\n");
+    ssl_block.push_str(&format!("        proxy_pass {};\n", proxy_pass));
+    ssl_block.push_str("        proxy_set_header Host $host;\n");
+    ssl_block.push_str("        proxy_set_header X-Real-IP $remote_addr;\n");
+    ssl_block.push_str("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n");
+    ssl_block.push_str("        proxy_set_header X-Forwarded-Proto $scheme;\n");
+    ssl_block.push_str("    }\n");
+    ssl_block.push_str("}\n");
+
+    let mut conf = String::new();
+    conf.push_str("# auto-generated by vPanel\n");
+    if upgrade {
+        conf.push_str("server {\n");
+        conf.push_str("    listen 80;\n");
+        conf.push_str(&format!("    server_name {};\n", server_name));
+        conf.push_str("    return 301 https://$host$request_uri;\n");
+        conf.push_str("}\n");
+    } else {
+        // 保留原 80 块
+        conf.push_str(&content);
+    }
+    conf.push_str(&ssl_block);
+
+    if std::fs::write(&file, conf.as_bytes()).is_err() {
+        return (false, format!("写配置文件失败：{}", file));
+    }
+    let (ok, msg) = nginx_test();
+    if !ok {
+        return (false, format!("nginx 配置校验失败（未应用）：\n{}", msg));
+    }
+    let lnk = format!("{}/{}.conf", enabled_dir(), name);
+    if !std::path::Path::new(&lnk).exists() {
+        let _ = std::process::Command::new("ln").args(["-s", &format!("{}.conf", name), &lnk]).status();
+    }
+    let (ro, rm) = nginx_reload();
+    if ro {
+        (true, format!("站点 {} 已启用 HTTPS", name))
+    } else {
+        (false, format!("配置已写入但 reload 失败：{}", rm))
+    }
 }
 
 /// 启用 / 停用站点。

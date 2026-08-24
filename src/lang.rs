@@ -1207,7 +1207,7 @@ mod tests {
 
     #[test]
     fn range_rand_now() {
-        let (v, _, r) = run("ret(len(range(3)))", HashMap::new());
+        let (_v, _, r) = run("ret(len(range(3)))", HashMap::new());
         // range 返回数值型，实际上 range 被当作数值。验证 rand/now 为数值
         assert!(r.is_ok());
         let (v2, _, r2) = run("a = now()\nb = a + 1\nret(b > a)", HashMap::new());

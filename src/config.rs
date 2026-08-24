@@ -16,6 +16,12 @@ pub struct Config {
     pub plugins: Plugins,
     #[serde(default)]
     pub security: Security,
+    #[serde(default)]
+    pub database: Database,
+    #[serde(default)]
+    pub backup: Backup,
+    #[serde(default)]
+    pub certs: Certs,
 }
 
 /// 登录安全配置。
@@ -253,6 +259,9 @@ impl Default for Config {
             download: Download::default(),
             plugins: Plugins::default(),
             security: Security::default(),
+            database: Database::default(),
+            backup: Backup::default(),
+            certs: Certs::default(),
         }
     }
 }
@@ -342,4 +351,105 @@ impl Config {
         }
         (Config::default(), None)
     }
+}
+
+/// 数据库（MySQL/MariaDB）管理配置。
+#[derive(Debug, Clone, Deserialize)]
+pub struct Database {
+    /// 用于管理的数据库账号。
+    #[serde(default = "d_db_user")]
+    pub user: String,
+    /// 该账号密码（留空则用无密码套接字尝试）。
+    #[serde(default)]
+    pub password: String,
+    /// mysql 客户端命令路径。
+    #[serde(default = "d_db_bin")]
+    pub bin: String,
+    /// mysqldump 命令路径。
+    #[serde(default = "d_dump_bin")]
+    pub dump: String,
+    /// 数据库备份目录。
+    #[serde(default = "d_db_backup")]
+    pub backup_dir: String,
+}
+
+impl Default for Database {
+    fn default() -> Self {
+        Database {
+            user: d_db_user(),
+            password: String::new(),
+            bin: d_db_bin(),
+            dump: d_dump_bin(),
+            backup_dir: d_db_backup(),
+        }
+    }
+}
+
+/// 备份模块配置。
+#[derive(Debug, Clone, Deserialize)]
+pub struct Backup {
+    /// 备份根目录。
+    #[serde(default = "d_broot")]
+    pub dir: String,
+    /// 每个备份源保留的版本数。
+    #[serde(default = "d_bkeep")]
+    pub keep: u32,
+    /// 定时备份是否启用。
+    #[serde(default = "d_bcron")]
+    pub cron: String,
+}
+
+impl Default for Backup {
+    fn default() -> Self {
+        Backup {
+            dir: d_broot(),
+            keep: d_bkeep(),
+            cron: d_bcron(),
+        }
+    }
+}
+
+/// 证书（SSL）存储配置。
+#[derive(Debug, Clone, Deserialize)]
+pub struct Certs {
+    /// 证书存放目录（每个站点一个子目录）。
+    #[serde(default = "d_certs_dir")]
+    pub dir: String,
+    /// Let's Encrypt 关联网站（acme.sh 方式，需已安装）。
+    #[serde(default)]
+    pub le: bool,
+}
+
+impl Default for Certs {
+    fn default() -> Self {
+        Certs {
+            dir: d_certs_dir(),
+            le: false,
+        }
+    }
+}
+
+fn d_db_user() -> String {
+    "root".to_string()
+}
+fn d_db_bin() -> String {
+    "mysql".to_string()
+}
+fn d_dump_bin() -> String {
+    "mysqldump".to_string()
+}
+fn d_db_backup() -> String {
+    format!("{}/db-backup", crate::config::Config::panel_dir())
+}
+fn d_broot() -> String {
+    format!("{}/backup", crate::config::Config::panel_dir())
+}
+fn d_bkeep() -> u32 {
+    5
+}
+fn d_bcron() -> String {
+    "0 3 * * *".to_string()
+}
+fn d_certs_dir() -> String {
+    format!("{}/certs", crate::config::Config::panel_dir())
 }

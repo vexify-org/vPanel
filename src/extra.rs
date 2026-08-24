@@ -577,3 +577,10 @@ fn read_status_rss(p: &str) -> u64 {
         })
         .unwrap_or(0)
 }
+
+/// WAF 状态：conf.d/vpanel-waf.conf 是否存在。
+pub fn waf_status_json(cfg: &crate::config::Config) -> String {
+    let file = format!("{}/conf.d/vpanel-waf.conf", crate::nginx::conf_dir());
+    let on = std::path::Path::new(&file).is_file();
+    format!("{{\"ok\":true,\"on\":{},\"file\":\"{}\"}}", on, json::jesc(&file))
+}

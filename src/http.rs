@@ -37,9 +37,14 @@ pub struct State {
 /// 启动监听并派发工作线程。阻塞运行，直到进程退出。
 pub fn serve(cfg: Config) -> std::io::Result<()> {
     let monitor = crate::system::Monitor::start();
+    crate::monitor::start();
     let shop = crate::shop::Shop::new();
     let plugins = crate::plugins::Plugins::new();
     plugins.load(&cfg); // 从 plugins 目录加载插件 + 启动定时线程
+    crate::api::db_config_init(&cfg);
+    crate::api::certs_config_init(&cfg);
+    crate::api::backup_config_init(&cfg);
+    crate::api::config_init(&cfg);
     let auth = Arc::new(crate::auth::SecurityGuard::new(cfg.security.clone()));
     let tls = crate::tls::Server::build(&cfg.server.tls)?;
     let addr = format!("{}:{}", cfg.server.bind, cfg.server.port);

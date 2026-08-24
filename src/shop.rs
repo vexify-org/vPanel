@@ -202,6 +202,7 @@ pub const DEFAULT_STORE: &str = "vexify-org/vp-store@main";
 fn default_apps() -> Vec<App> {
     vec![
         App { id: "nginx".into(), name: "Nginx".into(), desc: "高性能 Web / 反向代理服务器".into(), script: "set -e\napt-get update -qq\napt-get install -y -qq nginx\n".into() },
+        App { id: "php".into(), name: "PHP (FPM)".into(), desc: "PHP 脚本运行时 + 常用扩展".into(), script: "set -e\napt-get update -qq\nDEBIAN_FRONTEND=noninteractive apt-get install -y -qq php-fpm php-cli php-mysql php-curl php-gd php-intl php-mbstring php-xml php-zip php-redis\nsystemctl enable php-fpm 2>/dev/null || true\n".into() },
         App { id: "docker".into(), name: "Docker".into(), desc: "容器运行时（官方脚本，走加速）".into(), script: "set -e\ncurl -fsSL \"{accel}https://get.docker.com\" | sh\n".into() },
         App { id: "redis".into(), name: "Redis".into(), desc: "内存键值数据库".into(), script: "set -e\napt-get update -qq && apt-get install -y -qq redis-server\n".into() },
         App { id: "mysql".into(), name: "MySQL".into(), desc: "关系型数据库".into(), script: "set -e\napt-get update -qq\nDEBIAN_FRONTEND=noninteractive apt-get install -y -qq mysql-server\n".into() },
