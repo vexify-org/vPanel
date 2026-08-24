@@ -69,6 +69,59 @@ pub fn form_get<'a>(fields: &'a [(String, String)], key: &str) -> Option<&'a str
     fields.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
 }
 
+/// 从 JSON 对象文本中读取一个标量字段（字符串去引号、bool/数字为原样文本）。
+/// 找不到或类型不符返回 None。极小实现，够 auth 端点用即可。
+pub fn json_field(body: &[u8], key: &str) -> Option<String> {
+    let text = String::from_utf8_lossy(body);
+    let needle = format!("\"{}\"", key);
+    let pos = text.find(&needle)?;
+    let after = text[pos + needle.len()..].trim_start();
+    let rest = after.strip_prefix(':')?.trim_start();
+    let mut chars = rest.chars();
+    let first = chars.next()?;
+    match first {
+        '"' => {
+            let mut s = String::new();
+            while let Some(c) = chars.next() {
+                match c {
+                    '"' => break,
+                    '\\' => {
+                        if let Some(e) = chars.next() {
+                            s.push(match e {
+                                'n' => '\n',
+                                'r' => '\r',
+                                't' => '\t',
+                                other => other,
+                            });
+                        }
+                    }
+                    c => s.push(c),
+                }
+            }
+            Some(s)
+        }
+        't' => Some("true".into()),
+        'f' => Some("false".into()),
+        c if c.is_ascii_digit() || c == '-' => {
+            let mut s = String::new();
+            s.push(c);
+            for c in chars {
+                if c == ',' || c == '}' || c == ']' || c.is_whitespace() {
+                    break;
+                }
+                s.push(c);
+            }
+            Some(s)
+        }
+        _ => None,
+    }
+}
+
+/// JSON 布尔字段为真判断。
+pub fn json_bool(body: &[u8], key: &str) -> bool {
+    matches!(json_field(body, key).as_deref(), Some("true"))
+}
+
 /// 运行一条命令，返回其 stdout（超时 5s，失败返回 None）。用于读类操作。
 pub fn run_out(cmd: &str, args: &[&str]) -> Option<String> {
     let out = std::process::Command::new(cmd)

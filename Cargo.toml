@@ -16,6 +16,10 @@ serde_json = "1"
 portable-pty = "0.8"
 sha1 = "0.10"
 base64 = "0.22"
+# 内置 HTTPS：TLS 终结（自签 / 已有证书），对齐 iotapanel 的 https-front。
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rustls-pemfile = "2"
+rcgen = { version = "0.13", default-features = false, features = ["ring"] }
 
 [profile.release]
 # 尽力把二进制和常驻内存压到最小

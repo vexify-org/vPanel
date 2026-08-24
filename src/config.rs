@@ -14,6 +14,60 @@ pub struct Config {
     pub download: Download,
     #[serde(default)]
     pub plugins: Plugins,
+    #[serde(default)]
+    pub security: Security,
+}
+
+/// 登录安全配置。
+///
+/// `enabled` 默认关闭以保持向后兼容；开启后未设置密码会进入初始设置向导，
+/// 设置完成后所有页面与 API 均需登录。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct Security {
+    /// 是否开启登录保护。默认 false。
+    #[serde(default)]
+    pub enabled: bool,
+    /// 管理员密码（明文，仅用于首次设置；设置成功后存入哈希文件，可留空走向导）。
+    #[serde(default)]
+    pub password: String,
+    /// MCP 端点的独立 Bearer 令牌（可选）。留空则 MCP 需走面板登录会话。
+    #[serde(default)]
+    pub mcp_token: String,
+    /// 连续失败多少次后锁定。
+    #[serde(default = "d_max_failures")]
+    pub max_failures: u32,
+    /// 锁定时长（分钟）。
+    #[serde(default = "d_lock_minutes")]
+    pub lock_minutes: u32,
+    /// 会话有效期（小时）。
+    #[serde(default = "d_session_hours")]
+    pub session_hours: u32,
+    /// 「记住我」有效期（天），登录勾选记住我时使用。
+    #[serde(default = "d_remember_days")]
+    pub remember_days: u32,
+    /// 单账号单会话：新登录自动踢掉旧会话。默认 true（与 IotaPanel 一致）。
+    #[serde(default = "d_true")]
+    pub single_session: bool,
+    /// 面板位于受信 HTTPS 反向代理之后时置真，用于识别 HTTPS 并开放代理头部。
+    #[serde(default)]
+    pub trust_proxy: bool,
+}
+
+fn d_remember_days() -> u32 {
+    30
+}
+fn d_true() -> bool {
+    true
+}
+
+fn d_max_failures() -> u32 {
+    5
+}
+fn d_lock_minutes() -> u32 {
+    5
+}
+fn d_session_hours() -> u32 {
+    24
 }
 
 /// 插件系统配置。
@@ -82,6 +136,41 @@ pub struct Server {
     pub workers: usize,
     #[serde(default = "d_backlog")]
     pub backlog: usize,
+    /// 内置 HTTPS：TLS 终结。
+    #[serde(default)]
+    pub tls: Tls,
+}
+
+/// 内置 HTTPS 配置（对齐 iotapanel 的 https-front）。
+#[derive(Debug, Clone, Deserialize)]
+pub struct Tls {
+    /// 是否开启内置 TLS。默认 false。
+    #[serde(default)]
+    pub enabled: bool,
+    /// 已有证书 PEM 路径（cert）与私钥 PEM 路径（key）。两者都填则使用已有证书，
+    /// 否则自动生成一次性自签证书（开箱即用，浏览器会提示证书警告）。
+    #[serde(default)]
+    pub cert_file: String,
+    #[serde(default)]
+    pub key_file: String,
+    /// 自签证书的通用名 / SAN（用于识别）。默认 "vpanel"。
+    #[serde(default = "d_tls_host")]
+    pub host: String,
+}
+
+impl Default for Tls {
+    fn default() -> Self {
+        Tls {
+            enabled: false,
+            cert_file: String::new(),
+            key_file: String::new(),
+            host: d_tls_host(),
+        }
+    }
+}
+
+fn d_tls_host() -> String {
+    "vpanel.local".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -103,6 +192,7 @@ impl Default for Server {
             port: d_port(),
             workers: d_workers(),
             backlog: d_backlog(),
+            tls: Tls::default(),
         }
     }
 }
@@ -147,6 +237,7 @@ impl Default for Config {
                 port: d_port(),
                 workers: d_workers(),
                 backlog: d_backlog(),
+                tls: Tls::default(),
             },
             panel: Panel {
                 title: d_title(),
@@ -157,6 +248,7 @@ impl Default for Config {
             shell: Shell::default(),
             download: Download::default(),
             plugins: Plugins::default(),
+            security: Security::default(),
         }
     }
 }

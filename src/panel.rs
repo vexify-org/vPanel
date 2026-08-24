@@ -61,6 +61,113 @@ pub fn render_term(cfg: &crate::config::Config) -> String {
         .replace("__BG__", &theme_css)
 }
 
+/// 登录 / 初始设置页。开启认证且未设置密码时走初始设置向导。
+pub fn render_login(state: &State) -> String {
+    let cfg = &state.cfg;
+    let accent = esc_attr(&cfg.panel.accent);
+    let title = esc_attr(&cfg.panel.title);
+    let dark = cfg.panel.theme.eq_ignore_ascii_case("dark");
+    let card = if dark { "background:#1e293b;border:1px solid #334155" } else { "background:#fff;border:1px solid #e5e7eb" };
+    let ink = if dark { "#e2e8f0" } else { "#1f2937" };
+    let sub = if dark { "#94a3b8" } else { "#6b7280" };
+    let bg = if dark { "#0f172a" } else { "#f4f6fb" };
+    LOGIN_TEMPLATE
+        .replace("__ACCENT__", &accent)
+        .replace("__TITLE__", &title)
+        .replace("__CARD__", card)
+        .replace("__INK__", ink)
+        .replace("__SUB__", sub)
+        .replace("__BG__", bg)
+}
+
+/// 登录/初始设置页面（纯内联，无外部资源）。
+const LOGIN_TEMPLATE: &str = r#"<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 · __TITLE__</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:__BG__;display:flex;align-items:center;justify-content:center;min-height:100vh;color:__INK__}
+.card{width:360px;max-width:92vw;padding:34px 30px;border-radius:16px;__CARD__;box-shadow:0 10px 30px rgba(0,0,0,.06)}
+.logo{width:46px;height:46px;border-radius:12px;background:__ACCENT__;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;margin:0 auto 16px}
+h1{font-size:19px;font-weight:800;text-align:center;margin-bottom:6px}
+p.sub{font-size:13px;color:__SUB__;text-align:center;margin-bottom:24px}
+label{display:block;font-size:13px;color:__SUB__;margin:14px 0 6px}
+input{width:100%;padding:11px 12px;border:1px solid #d1d5db;border-radius:9px;font-size:14px;background:transparent;color:__INK__}
+input:focus{outline:none;border-color:__ACCENT__;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.row{display:flex;align-items:center;justify-content:space-between;margin:16px 0 6px;font-size:13px;color:__SUB__}
+.row label{margin:0;cursor:pointer}
+button{width:100%;padding:12px;border:none;border-radius:9px;background:__ACCENT__;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-top:18px}
+button:disabled{opacity:.6;cursor:not-allowed}
+.msg{text-align:center;font-size:13px;margin-top:14px;min-height:18px;color:#dc2626}
+.loading{text-align:center;color:__SUB__;font-size:14px;padding:40px 0}
+</style>
+</head>
+<body>
+<div class="card" id="card" hidden>
+  <div class="logo">V</div>
+  <h1 id="head">欢迎使用 __TITLE__</h1>
+  <p class="sub" id="sub">登录面板</p>
+  <form id="form">
+    <label for="p1" id="lab1">密码</label>
+    <input type="password" id="p1" autocomplete="current-password" placeholder="输入管理员密码">
+    <label for="p2" id="lab2" hidden>确认密码</label>
+    <input type="password" id="p2" autocomplete="new-password" placeholder="再次输入" hidden>
+    <div class="row"><label><input type="checkbox" id="rem"> 记住我（30 天）</label></div>
+    <button id="btn" type="submit">登 录</button>
+  </form>
+  <div class="msg" id="msg"></div>
+</div>
+<div class="loading" id="load">加载中…</div>
+<script>
+let setup=false;
+async function init(){
+  try{
+    const r=await fetch('/api/auth/state',{credentials:'same-origin'});
+    const d=await r.json();
+    setup=!!d.needs_setup;
+  }catch(e){}
+  document.getElementById('load').hidden=true;
+  document.getElementById('card').hidden=false;
+  if(setup){
+    document.getElementById('head').textContent='初始化面板';
+    document.getElementById('sub').textContent='设置管理员密码';
+    document.getElementById('lab1').textContent='管理员密码';
+    document.getElementById('lab2').hidden=false;
+    document.getElementById('p2').hidden=false;
+    document.getElementById('btn').textContent='创建并登录';
+  }
+}
+document.getElementById('form').addEventListener('submit',async function(ev){
+  ev.preventDefault();
+  const p1=document.getElementById('p1').value;
+  const p2=document.getElementById('p2').value;
+  const rem=document.getElementById('rem').checked;
+  const msg=document.getElementById('msg');
+  msg.textContent='';
+  if(p1.length<4){msg.textContent='密码至少 4 位';return;}
+  if(setup && p1!==p2){msg.textContent='两次输入不一致';return;}
+  const url=setup?'/api/setup':'/api/login';
+  const btn=document.getElementById('btn');
+  btn.disabled=true;
+  try{
+    const r=await fetch(url,{method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({password:p1,remember:rem})});
+    const d=await r.json();
+    if(d.ok){location.href='/';}
+    else{msg.textContent=d.msg||'登录失败';}
+  }catch(e){msg.textContent='请求失败';}
+  btn.disabled=false;
+});
+init();
+</script>
+</body>
+</html>
+"#;
+
 // ---------------------------------------------------------------------------
 // 管理控制台 HTML+JS（占位符注入，避免 format! 的双花括号问题）
 // ---------------------------------------------------------------------------

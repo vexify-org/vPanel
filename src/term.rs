@@ -18,7 +18,7 @@ use crate::ws::{self, Frame, Ws};
 /// 驱动一个终端会话，直到 WebSocket 关闭或 Shell 退出。
 pub fn run(mut ws: Ws, shell: &Shell) {
     if !shell.enabled {
-        let _ = ws::send_close(&mut ws.writer);
+        let _ = ws::send_close(&mut *ws.writer);
         return;
     }
 
@@ -32,7 +32,7 @@ pub fn run(mut ws: Ws, shell: &Shell) {
     let pair = match pty_system.openpty(size) {
         Ok(p) => p,
         Err(_) => {
-            let _ = ws::send_close(&mut ws.writer);
+            let _ = ws::send_close(&mut *ws.writer);
             return;
         }
     };
@@ -45,7 +45,7 @@ pub fn run(mut ws: Ws, shell: &Shell) {
     let mut child = match pair.slave.spawn_command(cmd) {
         Ok(c) => c,
         Err(_) => {
-            let _ = ws::send_close(&mut ws.writer);
+            let _ = ws::send_close(&mut *ws.writer);
             return;
         }
     };
@@ -57,19 +57,19 @@ pub fn run(mut ws: Ws, shell: &Shell) {
     let mut pty_writer = master.lock().unwrap().take_writer().unwrap();
 
     // 输出方向：PTY -> WebSocket（独立线程）。
-    let ws_out = ws.writer.try_clone();
-    if let Ok(mut w_out) = ws_out {
+    let ws_out = ws.writer.dup();
+    if let Some(mut w_out) = ws_out {
         std::thread::spawn(move || {
             let mut buf = [0u8; 4096];
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => {
-                        let _ = ws::send_close(&mut w_out);
+                        let _ = ws::send_close(&mut *w_out);
                         break;
                     }
                     Ok(n) => {
-                        if ws::send_binary(&mut w_out, &buf[..n]).is_err() {
-                            let _ = ws::send_close(&mut w_out);
+                        if ws::send_binary(&mut *w_out, &buf[..n]).is_err() {
+                            let _ = ws::send_close(&mut *w_out);
                             break;
                         }
                     }
@@ -105,10 +105,10 @@ pub fn run(mut ws: Ws, shell: &Shell) {
                 }
             }
             Some(Frame::Ping) => {
-                let _ = ws::send_pong(&mut ws.writer);
+                let _ = ws::send_pong(&mut *ws.writer);
             }
             Some(Frame::Close) | None => {
-                let _ = ws::send_close(&mut ws.writer);
+                let _ = ws::send_close(&mut *ws.writer);
                 break 'app;
             }
             _ => {}
