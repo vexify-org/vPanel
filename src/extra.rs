@@ -28,6 +28,27 @@ fn cmd_all(cmd: &str) -> Option<String> {
     }
 }
 
+/// 文件管理根目录越界检查。
+///
+/// - 未配置 `fs_root`：直接放行，返回 `Some(path)`（向后兼容）。
+/// - 已配置：把路径规范化并确认其落在根目录内；越界或无法解析返回 `None`。
+///   目标不存在时，以「父目录在根内」为准则（便于写/上传新文件）。
+fn confined(path: &str) -> Option<String> {
+    let root = crate::config::fs_root()?; // None => 不限制
+    let p = std::path::Path::new(path);
+    let canon = if p.exists() {
+        p.canonicalize().ok()
+    } else {
+        p.parent()
+            .and_then(|par| par.canonicalize().ok())
+            .map(|pp| pp.join(p.file_name().unwrap_or_default()))
+    };
+    match canon {
+        Some(c) if c.starts_with(&root) => Some(c.to_string_lossy().into_owned()),
+        _ => None,
+    }
+}
+
 fn human(bytes: u64) -> String {
     const U: [&str; 6] = ["B", "KB", "MB", "GB", "TB", "PB"];
     let mut v = bytes as f64;
@@ -340,7 +361,16 @@ const FOLLOW_MAX: usize = 256 * 1024;
 
 /// 目录列表 -> JSON。
 pub fn ls_json(path: &str) -> String {
-    let read = match std::fs::read_dir(path) {
+    let real = match confined(path) {
+        Some(p) => p,
+        None => {
+            return format!(
+                "{{\"ok\":false,\"msg\":\"{}\"}}",
+                json::jesc("路径越界：超出文件根目录限制")
+            )
+        }
+    };
+    let read = match std::fs::read_dir(&real) {
         Ok(r) => r,
         Err(e) => {
             return format!("{{\"ok\":false,\"msg\":\"{}\"}}", json::jesc(&e.to_string()))
@@ -396,7 +426,16 @@ pub fn ls_json(path: &str) -> String {
 
 /// 读取文本文件（上限 READ_MAX）-> JSON。
 pub fn read_file_json(path: &str) -> String {
-    let data = match std::fs::read_to_string(path) {
+    let real = match confined(path) {
+        Some(p) => p,
+        None => {
+            return format!(
+                "{{\"ok\":false,\"msg\":\"{}\"}}",
+                json::jesc("路径越界：超出文件根目录限制")
+            )
+        }
+    };
+    let data = match std::fs::read_to_string(&real) {
         Ok(s) => s,
         Err(e) => {
             return format!("{{\"ok\":false,\"msg\":\"{}\"}}", json::jesc(&e.to_string()))
@@ -412,7 +451,11 @@ pub fn read_file_json(path: &str) -> String {
 
 /// 删除文件或目录（递归）。
 pub fn del_path(path: &str) -> (bool, String) {
-    let md = match std::fs::metadata(path) {
+    let real = match confined(path) {
+        Some(p) => p,
+        None => return (false, "路径越界：超出文件根目录限制".to_string()),
+    };
+    let md = match std::fs::metadata(&real) {
         Ok(m) => m,
         Err(e) => return (false, format!("无法访问 {}: {}", path, e)),
     };
@@ -429,7 +472,11 @@ pub fn del_path(path: &str) -> (bool, String) {
 
 /// 写入文件（用于上传/编辑保存）；未设置大小上限检查由调用方完成。
 pub fn write_file(path: &str, bytes: &[u8]) -> (bool, String) {
-    match std::fs::write(path, bytes) {
+    let real = match confined(path) {
+        Some(p) => p,
+        None => return (false, "路径越界：超出文件根目录限制".to_string()),
+    };
+    match std::fs::write(&real, bytes) {
         Ok(_) => (true, format!("已保存 {} 字节 -> {}", bytes.len(), path)),
         Err(e) => (false, format!("写入失败: {}", e)),
     }
@@ -437,7 +484,8 @@ pub fn write_file(path: &str, bytes: &[u8]) -> (bool, String) {
 
 /// 读取整文件（下载用）。
 pub fn download(path: &str) -> Option<Vec<u8>> {
-    std::fs::read(path).ok()
+    let real = confined(path)?;
+    std::fs::read(&real).ok()
 }
 
 // ---------------------------------------------------------------------------
@@ -447,10 +495,19 @@ pub fn download(path: &str) -> Option<Vec<u8>> {
 /// du 扫描指定目录的一级子元素占用，降序返回 Top N -> JSON。
 /// 示例：/api/disk/top?path=/&n=20
 pub fn disk_top_json(path: &str, n: usize) -> String {
-    if !std::path::Path::new(path).is_dir() {
+    let real = match confined(path) {
+        Some(p) => p,
+        None => {
+            return format!(
+                "{{\"ok\":false,\"msg\":\"{}\"}}",
+                json::jesc("路径越界：超出文件根目录限制")
+            )
+        }
+    };
+    if !std::path::Path::new(&real).is_dir() {
         return format!("{{\"ok\":false,\"msg\":\"{} 不是目录\"}}", json::jesc(path));
     }
-    let out = cmd_all(&format!("du -xk --max-depth=1 {} 2>/dev/null", path)).unwrap_or_default();
+    let out = cmd_all(&format!("du -xk --max-depth=1 {} 2>/dev/null", real)).unwrap_or_default();
     let mut items: Vec<(u64, String)> = Vec::new();
     for line in out.lines() {
         let mut it = line.split_whitespace();

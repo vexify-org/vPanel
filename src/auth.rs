@@ -476,7 +476,12 @@ fn load() -> Persist {
 
 fn save(p: &Persist) {
     if let Ok(s) = serde_json::to_string(p) {
-        let _ = std::fs::write(auth_path(), s);
+        let path = auth_path();
+        // 先写临时文件再重命名，避免写一半崩溃导致状态文件损坏。
+        let tmp = format!("{}.tmp", path);
+        if std::fs::write(&tmp, &s).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
     }
 }
 

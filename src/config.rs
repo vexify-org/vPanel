@@ -16,6 +16,39 @@ pub struct Config {
     pub plugins: Plugins,
     #[serde(default)]
     pub security: Security,
+    /// 文件管理根目录（可选）。非空时所有文件读写/删除/下载均被限制在此目录内，
+    /// 防止以面板权限（常为 root）越权操作系统任意文件。留空则不限制（向后兼容）。
+    #[serde(default)]
+    pub fs_root: String,
+}
+
+/// 文件管理根目录（全局）。`None` 表示不限制。在 `http::serve` 启动时初始化一次。
+static FS_ROOT: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+
+/// 从配置（与环境变量 `VPANEL_FS_ROOT`）解析并设置文件根目录。
+pub fn init_fs_root(cfg: &Config) {
+    let raw = std::env::var("VPANEL_FS_ROOT")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| {
+            let s = cfg.fs_root.trim();
+            if s.is_empty() {
+                None
+            } else {
+                Some(s.to_string())
+            }
+        });
+    let root = raw.map(|s| std::path::PathBuf::from(s.trim().trim_end_matches('/').to_string()));
+    let _ = FS_ROOT.set(root);
+}
+
+/// 返回当前文件管理根目录（规范化后）。`None` 表示不限制。
+pub fn fs_root() -> Option<std::path::PathBuf> {
+    FS_ROOT
+        .get()
+        .cloned()
+        .flatten()
+        .and_then(|p| p.canonicalize().ok().or(Some(p)))
 }
 
 /// 登录安全配置。
@@ -139,6 +172,9 @@ pub struct Server {
     pub workers: usize,
     #[serde(default = "d_backlog")]
     pub backlog: usize,
+    /// 请求体最大字节数（防护：避免超大 body 撑爆内存）。默认 16MB。
+    #[serde(default = "d_max_body")]
+    pub max_body: usize,
     /// 内置 HTTPS：TLS 终结。
     #[serde(default)]
     pub tls: Tls,
@@ -195,6 +231,7 @@ impl Default for Server {
             port: d_port(),
             workers: d_workers(),
             backlog: d_backlog(),
+            max_body: d_max_body(),
             tls: Tls::default(),
         }
     }
@@ -241,6 +278,7 @@ impl Default for Config {
                 port: d_port(),
                 workers: d_workers(),
                 backlog: d_backlog(),
+                max_body: d_max_body(),
                 tls: Tls::default(),
             },
             panel: Panel {
@@ -253,6 +291,7 @@ impl Default for Config {
             download: Download::default(),
             plugins: Plugins::default(),
             security: Security::default(),
+            fs_root: String::new(),
         }
     }
 }
@@ -292,6 +331,9 @@ fn d_workers() -> usize {
 }
 fn d_backlog() -> usize {
     1024
+}
+fn d_max_body() -> usize {
+    16 * 1024 * 1024
 }
 fn d_title() -> String {
     "vPanel".to_string()

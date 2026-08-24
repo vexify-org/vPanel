@@ -9,10 +9,9 @@
 //!   GET /metrics   -> 纯文本状态（请求数 / 并发 / RSS）
 //!   其余           -> 404
 
-use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Instant;
 
 use crate::config::Config;
@@ -34,12 +33,52 @@ pub struct State {
     pub tls: crate::tls::Server,
 }
 
+/// 有界阻塞队列：接受线程放入连接，工作线程阻塞取出。
+/// 队列满时接受线程直接丢弃连接（内核背压），内存始终有界；
+/// 空时工作线程在条件变量上等待，避免忙轮询空耗 CPU。
+struct Queue {
+    inner: Mutex<std::collections::VecDeque<TcpStream>>,
+    cond: Condvar,
+    cap: usize,
+}
+
+impl Queue {
+    fn new(cap: usize) -> Queue {
+        Queue {
+            inner: Mutex::new(std::collections::VecDeque::new()),
+            cond: Condvar::new(),
+            cap,
+        }
+    }
+    /// 放入一个连接；队列满则丢弃（返回 false）。
+    fn push(&self, s: TcpStream) -> bool {
+        let mut q = self.inner.lock().unwrap();
+        if q.len() >= self.cap {
+            return false;
+        }
+        q.push_back(s);
+        self.cond.notify_one();
+        true
+    }
+    /// 阻塞取出一个连接（队列空时等待）。
+    fn pop(&self) -> TcpStream {
+        let mut q = self.inner.lock().unwrap();
+        loop {
+            if let Some(s) = q.pop_front() {
+                return s;
+            }
+            q = self.cond.wait(q).unwrap();
+        }
+    }
+}
+
 /// 启动监听并派发工作线程。阻塞运行，直到进程退出。
 pub fn serve(cfg: Config) -> std::io::Result<()> {
     let monitor = crate::system::Monitor::start();
     let shop = crate::shop::Shop::new();
     let plugins = crate::plugins::Plugins::new();
     plugins.load(&cfg); // 从 plugins 目录加载插件 + 启动定时线程
+    crate::config::init_fs_root(&cfg); // 初始化文件管理根目录
     let auth = Arc::new(crate::auth::SecurityGuard::new(cfg.security.clone()));
     let tls = crate::tls::Server::build(&cfg.server.tls)?;
     let addr = format!("{}:{}", cfg.server.bind, cfg.server.port);
@@ -60,9 +99,7 @@ pub fn serve(cfg: Config) -> std::io::Result<()> {
     });
 
     // 有界队列：高并发时连接在此排队或直接拒绝，内存不随之膨胀。
-    let queue: Arc<Mutex<std::collections::VecDeque<TcpStream>>> =
-        Arc::new(Mutex::new(std::collections::VecDeque::new()));
-    let cap = state.cfg.server.backlog.max(16);
+    let queue: Arc<Queue> = Arc::new(Queue::new(state.cfg.server.backlog.max(16)));
 
     // 固定工作线程池。
     let workers = state.cfg.server.workers.max(1);
@@ -77,30 +114,20 @@ pub fn serve(cfg: Config) -> std::io::Result<()> {
         if state.tls.enabled() { "https" } else { "http" },
         addr
     );
-    accept_loop(&listener, queue, cap, state);
+    accept_loop(&listener, queue, state);
 
     Ok(())
 }
 
 /// 接受线程：非阻塞 accept，把新连接放入有界队列。
-fn accept_loop(
-    listener: &TcpListener,
-    queue: Arc<Mutex<std::collections::VecDeque<TcpStream>>>,
-    cap: usize,
-    state: Arc<State>,
-) {
+fn accept_loop(listener: &TcpListener, queue: Arc<Queue>, state: Arc<State>) {
     loop {
         match listener.accept() {
             Ok((stream, _)) => {
                 state.conns.fetch_add(1, Ordering::Relaxed);
-                let mut q = queue.lock().unwrap();
-                if q.len() >= cap {
-                    // 队列已满：丢弃，让内核背压，保持内存有界。
-                    let _ = stream;
-                } else {
-                    let _ = stream.set_nodelay(true);
-                    q.push_back(stream);
-                }
+                let _ = stream.set_nodelay(true);
+                // 队列满时丢弃，让内核背压，保持内存有界。
+                let _ = queue.push(stream);
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(std::time::Duration::from_millis(2));
@@ -110,23 +137,16 @@ fn accept_loop(
     }
 }
 
-/// 工作线程：从队列取出连接并处理。
-fn worker(queue: Arc<Mutex<std::collections::VecDeque<TcpStream>>>, state: Arc<State>) {
+/// 工作线程：从队列阻塞取出连接并处理。
+fn worker(queue: Arc<Queue>, state: Arc<State>) {
     loop {
-        let stream = {
-            let mut q = queue.lock().unwrap();
-            q.pop_front()
-        };
-        if let Some(raw) = stream {
-            state.active.fetch_add(1, Ordering::Relaxed);
-            // TLS 使能时先握手，再进入统一的 HTTP 处理。
-            if let Ok(mut conn) = crate::tls::accept(raw, &state.tls) {
-                handle(&mut *conn, &state);
-            }
-            state.active.fetch_sub(1, Ordering::Relaxed);
-        } else {
-            std::thread::sleep(std::time::Duration::from_millis(1));
+        let raw = queue.pop();
+        state.active.fetch_add(1, Ordering::Relaxed);
+        // TLS 使能时先握手，再进入统一的 HTTP 处理。
+        if let Ok(mut conn) = crate::tls::accept(raw, &state.tls) {
+            handle(&mut *conn, &state);
         }
+        state.active.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
@@ -150,13 +170,19 @@ fn handle(stream: &mut dyn Io, state: &State) {
     // 解析 Cookie / User-Agent / 来源 IP。
     let cookie = header_val(&head, "cookie");
     let ua = header_val(&head, "user-agent").unwrap_or("ua");
-    let client_key = stream.peer_ip().unwrap_or_else(|| "local".to_string());
+    // 真实客户端 IP：开启 trust_proxy 时优先取 X-Forwarded-For（取第一个，即原始客户端）。
+    let client_key = if state.cfg.security.trust_proxy {
+        header_val(&head, "x-forwarded-for")
+            .and_then(|v| v.split(',').next().map(|s| s.trim().to_string()))
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| stream.peer_ip().unwrap_or_else(|| "local".to_string()))
+    } else {
+        stream.peer_ip().unwrap_or_else(|| "local".to_string())
+    };
     let authed = state.auth.validate(cookie);
-    let _secure = state.cfg.security.trust_proxy
-        && header_val(&head, "x-forwarded-proto").map(|p| p.eq_ignore_ascii_case("https")).unwrap_or(false);
 
-    // 读取请求体（POST 才有；GET / WS 请求头内为空，安全）。
-    let body = read_body(stream, &head, &buf[..n]);
+    // 读取请求体（POST 才有；GET / WS 请求头内为空，安全）。受 max_body 上限保护。
+    let body = read_body(stream, &head, &buf[..n], state.cfg.server.max_body);
 
     // MCP 端点：会话 cookie 或独立 Bearer 令牌二选一放行。
     if target == "/mcp" && method == "POST" {
@@ -185,7 +211,7 @@ fn handle(stream: &mut dyn Io, state: &State) {
         }
         // 需要登录：拦下所有页面 / API / 终端。
         if !authed {
-            if target == "/ws" || target.starts_with("/api/") || target.starts_with("/api") {
+            if target == "/ws" || target.starts_with("/api/") {
                 let _ = respond(stream, "401 Unauthorized", "application/json; charset=utf-8", "{\"ok\":false,\"msg\":\"未登录\"}".as_bytes());
             } else {
                 let html = crate::panel::render_login(state);
@@ -279,7 +305,9 @@ fn handle(stream: &mut dyn Io, state: &State) {
 }
 
 /// 读取请求头之后的请求体：先取缓冲区剩余，再按 Content-Length 补充。
-fn read_body(stream: &mut dyn Io, head: &str, buf: &[u8]) -> Vec<u8> {
+/// `max` 为请求体允许的最大字节数，超限截断（配合上传端点自己的更严格上限），
+/// 防止超大 body 撑爆内存。
+fn read_body(stream: &mut dyn Io, head: &str, buf: &[u8], max: usize) -> Vec<u8> {
     let clen: usize = head
         .split("\r\n")
         .find_map(|l| {
@@ -296,20 +324,22 @@ fn read_body(stream: &mut dyn Io, head: &str, buf: &[u8]) -> Vec<u8> {
     if clen == 0 {
         return Vec::new();
     }
+    // 实际读取上限：声明长度与配置上限取小。
+    let want = clen.min(max);
     // 头结束位置。
     let head_end = match head.find("\r\n\r\n") {
         Some(i) => i + 4,
         None => return Vec::new(),
     };
-    let mut body = buf[head_end.min(buf.len())..buf.len().min(head_end + clen)].to_vec();
-    while body.len() < clen {
+    let mut body = buf[head_end.min(buf.len())..buf.len().min(head_end + want)].to_vec();
+    while body.len() < want {
         let mut t = [0u8; 2048];
         match stream.read(&mut t) {
             Ok(0) | Err(_) => break,
             Ok(m) => body.extend_from_slice(&t[..m]),
         }
     }
-    body.truncate(clen);
+    body.truncate(want);
     body
 }
 

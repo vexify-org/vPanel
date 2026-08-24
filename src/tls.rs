@@ -148,15 +148,51 @@ fn load_key(path: &str) -> io::Result<PrivateKeyDer<'static>> {
 }
 
 /// 生成一次性自签证书。浏览器会提示证书警告，但能立即可用、免配置。
+///
+/// 证书会缓存到运行目录（`.vpanel-cert.pem` / `.vpanel-key.pem`），下次启动复用，
+/// 避免每次重启都换证导致客户端需反复信任。
 fn self_signed(host: &str) -> io::Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)> {
     use rcgen::{generate_simple_self_signed, CertifiedKey};
+    let dir = crate::config::Config::panel_dir();
+    let cert_path = format!("{}/.vpanel-cert.pem", dir);
+    let key_path = format!("{}/.vpanel-key.pem", dir);
+    // 复用已生成的证书。
+    if let (Ok(cb), Ok(kb)) = (std::fs::read(&cert_path), std::fs::read(&key_path)) {
+        let mut cr = std::io::BufReader::new(&cb[..]);
+        if let Ok(certs) = rustls_pemfile::certs(&mut cr).collect::<Result<Vec<_>, _>>() {
+            let mut kr = std::io::BufReader::new(&kb[..]);
+            if let Ok(Some(key)) = rustls_pemfile::private_key(&mut kr) {
+                if !certs.is_empty() {
+                    return Ok((certs, key));
+                }
+            }
+        }
+    }
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec![host.to_string()])
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("self-sign failed: {e}")))?;
     let cert_der: CertificateDer<'static> = cert.der().clone();
     let pkcs8: rustls::pki_types::PrivatePkcs8KeyDer<'static> =
         key_pair.serialize_der().to_vec().into();
     let key_der = PrivateKeyDer::Pkcs8(pkcs8);
+    // 落盘缓存为 PEM（失败不影响本次启动）：下次启动复用，避免反复换证。
+    let key_bytes = key_pair.serialize_der();
+    let _ = std::fs::write(&cert_path, to_pem(cert_der.as_ref(), "CERTIFICATE"));
+    let _ = std::fs::write(&key_path, to_pem(&key_bytes, "PRIVATE KEY"));
     Ok((vec![cert_der], key_der))
+}
+
+/// 把 DER 字节包成 PEM 文本（64 列 base64）。
+fn to_pem(der: &[u8], ty: &str) -> String {
+    use base64::engine::general_purpose::STANDARD as B64;
+    use base64::Engine;
+    let b64 = B64.encode(der);
+    let mut s = format!("-----BEGIN {}-----\n", ty);
+    for chunk in b64.as_bytes().chunks(64) {
+        s.push_str(std::str::from_utf8(chunk).unwrap_or(""));
+        s.push('\n');
+    }
+    s.push_str(&format!("-----END {}-----\n", ty));
+    s
 }
 
 /// 把 incoming 连接包装为统一流：TLS 握手或透传。

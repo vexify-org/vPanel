@@ -635,14 +635,14 @@ function loadRs(){
     var t='<table><tr><th class="num">CPU%</th><th>进程</th><th class="num">内存</th><th></th></tr>';
     (d.list||[]).forEach(function(p){
       t+='<tr><td class="num">'+p.cpu+'%</td><td>'+esc(p.name)+' <span class="muted">(PID '+p.pid+')</span></td><td class="num">'+p.human+'</td><td style="text-align:right"><button class="mini danger" onclick="killP('+p.pid+')">结束</button></td></tr>'});
-    t+='</table>'+(d.list||[]).length?'':muted('无数据');
+    t+='</table>'+( (d.list||[]).length ? '' : muted('无数据') );
     $('rsres').innerHTML=t;
   }).catch(function(){$('rsres').innerHTML='<span class="hot">采样失败</span>'});
   fetch('/api/autostart').then(function(r){return r.json()}).then(function(d){
     var t='<table><tr><th>服务</th><th>状态</th><th></th></tr>';
     (d.list||[]).forEach(function(s){
       t+='<tr><td>'+esc(s.name)+'</td><td class="muted">'+esc(s.state)+'</td><td style="text-align:right"><button class="mini danger" onclick="autoSet(\''+esc(s.name)+'\',false)">关闭自启</button></td></tr>'});
-    t+='</table>'+(d.list||[]).length?'':muted('暂无可用的自启服务');
+    t+='</table>'+( (d.list||[]).length ? '' : muted('暂无可用的自启服务') );
     $('rsauto').innerHTML=t;
   }).catch(function(){$('rsauto').innerHTML='<span class="hot">无法加载自启服务</span>'});
 }

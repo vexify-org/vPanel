@@ -95,7 +95,6 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
                 }
             }
         }
-        target if target.starts_with("/api/plugin/") => plugin_call(target, body, state),
         _ => {
             if method == "POST" {
                 action_route(trg, body, qs)

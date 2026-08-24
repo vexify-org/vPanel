@@ -165,9 +165,10 @@ fn read_net() -> Option<(u64, u64)> {
         if let Some(r) = f.next() {
             recv += r;
         }
-        // 第 9 个字段是发送字节。
+        // 第 9 个字段（0 基索引 8）是发送字节（tx_bytes）。recv 已消费字段 0，
+        // 此处需跳过字段 1..7（7 个）后取字段 8。
         let mut trans_v = 0u64;
-        for _ in 0..8 {
+        for _ in 0..7 {
             if let Some(_) = f.next() {
                 continue;
             }
