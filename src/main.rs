@@ -27,6 +27,7 @@ mod security;
 mod system;
 mod term;
 mod tls;
+mod website;
 mod ws;
 
 use std::process::ExitCode;

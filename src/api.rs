@@ -21,6 +21,7 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
         "/api/conns" => crate::extra::conns_json(),
         "/api/autostart" => crate::nginx::autostart_json(),
         "/api/nginx" => crate::nginx::nginx_list_json(),
+        "/api/website" => crate::website::website_list_json(),
         "/api/disk/top" => {
             let q = question_query(qs);
             let path = q_get(&q, "path").unwrap_or("/").to_string();
@@ -344,6 +345,35 @@ fn action_route(target: &str, body: &[u8], _qs: &str) -> String {
         }
         "/api/nginx/reload" => {
             let (ok, msg) = crate::nginx::nginx_reload_endpoint();
+            ok_bool(ok, msg)
+        }
+        "/api/website/create" => {
+            let name = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            let domain = json::form_get(&fields, "domain").unwrap_or("").trim().to_string();
+            let listen = json::form_get(&fields, "listen").unwrap_or("80").trim().to_string();
+            let php = json::form_get(&fields, "php").unwrap_or("0").trim() == "1"
+                || json::form_get(&fields, "php").unwrap_or("0").trim() == "true";
+            let (ok, msg) = crate::website::website_create(&name, &domain, &listen, php);
+            ok_bool(ok, msg)
+        }
+        "/api/website/toggle" => {
+            let name = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            let enable = json::form_get(&fields, "enable").unwrap_or("").trim() == "true"
+                || json::form_get(&fields, "enable").unwrap_or("0").trim() == "1";
+            let (ok, msg) = crate::website::website_toggle(&name, enable);
+            ok_bool(ok, msg)
+        }
+        "/api/website/delete" => {
+            let name = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            let drop_root = json::form_get(&fields, "drop_root").unwrap_or("0").trim() == "1"
+                || json::form_get(&fields, "drop_root").unwrap_or("0").trim() == "true";
+            let (ok, msg) = crate::website::website_delete(&name, drop_root);
+            ok_bool(ok, msg)
+        }
+        "/api/website/rewrite" => {
+            let name = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+            let kind = json::form_get(&fields, "kind").unwrap_or("none").trim().to_string();
+            let (ok, msg) = crate::website::rewrite_apply(&name, &kind);
             ok_bool(ok, msg)
         }
         "/api/autostart" => {
