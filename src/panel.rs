@@ -235,8 +235,8 @@ form.rowform{display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wr
 <div class="toast" id="toast"></div>
 <script>
 var ACCENT='__ACCENT__', SHELL_ON=__SHELL_ON__;
-var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务",shop:"软件商店",mcp:"AI 工具",plg:"插件",inf:"系统信息",net:"网络连接",log:"实时日志",fs:"文件管理",dk:"磁盘占用",rp:"反向代理",rs:"资源排行"};
-var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["fw","安全"],["tk","定时"],["shop","商店"],["mcp","AI"],["plg","插件"],["inf","信息"],["net","连接"],["log","日志"],["fs","文件"],["dk","磁盘"],["rp","反代"],["rs","资源"]];
+var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务",shop:"软件商店",mcp:"AI 工具",plg:"插件",inf:"系统信息",net:"网络连接",log:"实时日志",fs:"文件管理",dk:"磁盘占用",rp:"反向代理",web:"网站管理",rs:"资源排行"};
+var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["web","网站"],["fw","安全"],["tk","定时"],["rp","反代"],["shop","商店"],["mcp","AI"],["plg","插件"],["inf","信息"],["net","连接"],["log","日志"],["fs","文件"],["dk","磁盘"],["rs","资源"]];
 if(SHELL_ON)TABS.push(["term","终端"]);
 var cur="ov";
 
@@ -255,7 +255,8 @@ function choose(){window.clearInterval(window._iv);$('ttl').textContent=TITLES[c
   if(cur==='shop')loadShop(); if(cur==='mcp')loadMCP(); if(cur==='plg')loadPlug();
   if(cur==='inf')loadInf(); if(cur==='net'){loadNet();window._iv=setInterval(loadNet,3000)}
   if(cur==='log')loadLogCfg(); if(cur==='fs')loadFs('/');
-  if(cur==='dk')loadDk('/'); if(cur==='rp')loadRp(); if(cur==='rs'){loadRs();window._iv=setInterval(loadRs,5000)}
+  if(cur==='dk')loadDk('/'); if(cur==='rp')loadRp(); if(cur==='web')loadWeb();
+  if(cur==='rs'){loadRs();window._iv=setInterval(loadRs,5000)}
 }
 
 function chart(cid){return {id:cid,path:"",draw:function(arr,color,max){var v=$('svg#c'+cid);if(!v)return;var w=v.clientWidth||300,h=v.clientHeight||120,n=arr.length;if(!n)return;var pad=2;function px(arr){var t="";for(var i=0;i<n;i++){var x=pad+(i/(n-1))*(w-2*pad);var val=Math.min(arr[i]||0,max||100);var y=h-pad-(h-2*pad)*(val/(max||100));t+=(i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1)}return t}
@@ -624,6 +625,43 @@ function rpAdd(e){e.preventDefault();var f=new FormData(e.target);var args={};f.
 function rpToggle(name,on){post('/api/nginx/toggle',{name:name,enable:(on?'true':'false')},function(res){toast(res&&res.msg||'已处理');loadRp()})}
 function rpDel(name){if(!confirm('确定删除站点 '+name+'？（会删除配置文件）'))return;post('/api/nginx/delete',{name:name},function(res){toast(res&&res.msg||'已处理');loadRp()})}
 function rpReload(){post('/api/nginx/reload',{},function(res){toast(res&&res.msg||'已 reload')})}
+
+/* ---- 网站建站管理 ---- */
+function loadWeb(){
+  var h='<div class="card" style="padding:6px 18px 18px"><div class="l" style="padding-top:14px">网站建站（Nginx 站点 + 可选 PHP-FPM）</div>'
+    +'<div class="muted" style="line-height:1.8">创建真实网站（自动建根目录与默认首页），可选接入 PHP-FPM；支持伪静态（WordPress/ThinkPHP/Laravel）与启停/删除。</div></div>'
+    +'<div class="card" style="margin-top:14px"><div class="l">新建网站</div>'
+    +'<form class="rowform" style="flex-wrap:wrap" onsubmit="webAdd(event)">'
+    +'<label style="min-width:96px">站点名 *<input name="name" style="flex:1" placeholder="myblog"></label>'
+    +'<label style="min-width:120px">域名 *<input name="domain" style="flex:1" placeholder="blog.example.com"></label>'
+    +'<label style="min-width:72px">端口 <input name="listen" style="flex:1" value="80"></label>'
+    +'<label style="min-width:88px" title="接入 PHP-FPM"><select name="php"><option value="0">静态</option><option value="1">PHP</option></select></label>'
+    +'<button class="pri" type="submit">创建网站</button></form></div>'
+    +'<div class="toolbar" style="margin-top:10px"><button class="mini" onclick="loadWeb()">刷新</button></div>';
+  h+='<div class="card" style="margin-top:14px" id="webres"><div class="l">已配置网站</div><table><tr><th>站点</th><th>域名</th><th>端口</th><th>类型</th><th>根目录</th><th>状态</th><th></th></tr><tr><td colspan="7" class="muted">加载中…</td></tr></table></div>';
+  $('view').innerHTML=h;
+  fetch('/api/website').then(function(r){return r.json()}).then(function(d){
+    var el=$('webres');if(!d.ok){el.innerHTML='<span class="hot">'+esc(d.msg||'获取失败')+'</span>';return}
+    var t='<div class="l">已配置网站 <span class="muted">(root @ '+esc(d.basedir)+')</span></div><table><tr><th>站点</th><th>域名</th><th>端口</th><th>类型</th><th>根目录</th><th>状态</th><th></th></tr>';
+    (d.list||[]).forEach(function(s){
+      var php=s.php?'<span class="cool">PHP</span>':'<span class="muted">静态</span>';
+      t+='<tr><td><b>'+esc(s.name)+'</b></td><td>'+esc(s.domain||'—')+'</td><td class="num">'+esc(s.listen||'—')+'</td><td>'+php+'</td><td class="muted">'+esc(s.root||'—')+'</td>'
+       +'<td>'+(s.enabled?'<span class="cool">● 启用</span>':'<span class="warm">● 停用</span>')+'</td>'
+       +'<td style="text-align:right;white-space:nowrap">'
+       +'<select class="mini" onchange="webRew(\''+esc(s.name)+'\',this.value)"><option value="">伪静态…</option><option value="wordpress">WordPress</option><option value="thinkphp">ThinkPHP</option><option value="laravel">Laravel</option><option value="none">移除</option></select> '
+       +(s.enabled?'<button class="mini" onclick="webTog(\''+esc(s.name)+'\',false)">停用</button>':'<button class="mini ok" onclick="webTog(\''+esc(s.name)+'\',true)">启用</button>')
+       +' <button class="mini danger" onclick="webDel(\''+esc(s.name)+'\')">删除</button>'
+       +'</td></tr>';
+    });
+    t+='</table>'+muted((d.list||[]).length+' 个网站');
+    el.innerHTML=t;
+  }).catch(function(){$('webres').innerHTML='<span class="hot">无法连接 /api/website</span>'});
+}
+function webAdd(e){e.preventDefault();var f=new FormData(e.target);var args={};f.forEach(function(v,k){args[k]=v});
+  post('/api/website/create',args,function(res){toast(res&&res.msg||'已处理');if(res&&res.ok)loadWeb()});}
+function webTog(name,on){post('/api/website/toggle',{name:name,enable:(on?'true':'false')},function(res){toast(res&&res.msg||'已处理');loadWeb()})}
+function webDel(name){if(!confirm('确定删除网站 '+name+' ？勾选随包删除根目录。'))return;post('/api/website/delete',{name:name,drop_root:'false'},function(res){toast(res&&res.msg||'已处理');loadWeb()})}
+function webRew(name,kind){if(kind==='')return;post('/api/website/rewrite',{name:name,kind:kind},function(res){toast(res&&res.msg||'已应用伪静态');loadWeb()})}
 
 /* ---- 资源实时排行 + 开机自启 ---- */
 function loadRs(){

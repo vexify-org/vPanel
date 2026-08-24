@@ -57,6 +57,24 @@ fn available() -> bool {
     std::path::Path::new(&avail_dir()).is_dir()
 }
 
+/// 判断启用目录里是否存在指向该配置文件的（符号链接）启用项。
+/// 用 symlink_metadata 避免跟随链接导致相对目标判空。
+fn link_exists(enabled_dir: &str, fname: &str) -> bool {
+    let lnk = std::path::Path::new(enabled_dir).join(fname);
+    match std::fs::symlink_metadata(&lnk) {
+        Ok(m) => m.file_type().is_symlink() || m.file_type().is_file(),
+        Err(_) => false,
+    }
+}
+
+/// 建立启用软链（用绝对目标，保证链接可解析）。
+fn link_enable(name: &str, fname: &str) {
+    let _ = std::fs::create_dir_all(enabled_dir());
+    let avail = format!("{}/{}", avail_dir(), fname);
+    let lnk = format!("{}/{}{}", enabled_dir(), name, conf_ext());
+    let _ = std::process::Command::new("ln").args(["-s", &avail, &lnk]).status();
+}
+
 fn valid_name(n: &str) -> bool {
     !n.is_empty()
         && n.len() <= 64
@@ -214,7 +232,7 @@ fn parse_site(content: &str) -> (String, String, String, bool, bool) {
                 }
             }
         } else if t.starts_with("listen") {
-            if let Some(rest) = t.get(5..) {
+            if let Some(rest) = t.get("listen".len()..) {
                 let first = rest.split_whitespace().next().unwrap_or("");
                 if listen.is_empty() && !first.contains("ssl") {
                     listen = first.trim_end_matches(';').to_string();
@@ -246,7 +264,7 @@ pub fn website_list_json() -> String {
             if !is_website {
                 continue;
             }
-            let enabled = std::path::Path::new(&enabled_dir()).join(&fname).exists();
+            let enabled = link_exists(&enabled_dir(), &fname);
             let docroot = root.clone();
             items.push(format!(
                 "{{\"name\":\"{}\",\"domain\":\"{}\",\"listen\":\"{}\",\"root\":\"{}\",\"php\":{},\"enabled\":{}}}",
@@ -331,12 +349,8 @@ pub fn website_create(name: &str, domain: &str, port: &str, php: bool) -> (bool,
         let _ = std::fs::remove_dir_all(&site_dir);
         return (false, format!("nginx 配置校验失败（已回滚）：\n{}", msg));
     }
-    let lnk = format!("{}/{}{}", enabled_dir(), name, conf_ext());
-    if !std::path::Path::new(&lnk).exists() {
-        let _ = std::fs::create_dir_all(enabled_dir());
-        let _ = std::process::Command::new("ln")
-            .args(["-s", &format!("{}{}", name, conf_ext()), &lnk])
-            .status();
+    if !link_exists(&enabled_dir(), &format!("{}{}", name, conf_ext())) {
+        link_enable(name, &format!("{}{}", name, conf_ext()));
     }
     let (ro, rm) = nginx_reload();
     let kind = if php { "PHP 站点" } else { "静态站点" };
@@ -358,13 +372,10 @@ pub fn website_toggle(name: &str, enable: bool) -> (bool, String) {
     }
     let lnk = format!("{}/{}{}", enabled_dir(), name, conf_ext());
     if enable {
-        if std::path::Path::new(&lnk).exists() {
+        if link_exists(&enabled_dir(), &format!("{}{}", name, conf_ext())) {
             return (true, format!("站点 {} 已处于启用状态", name));
         }
-        let _ = std::fs::create_dir_all(enabled_dir());
-        let _ = std::process::Command::new("ln")
-            .args(["-s", &format!("{}{}", name, conf_ext()), &lnk])
-            .status();
+        link_enable(name, &format!("{}{}", name, conf_ext()));
     } else {
         let _ = std::fs::remove_file(&lnk);
     }
