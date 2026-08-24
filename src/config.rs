@@ -22,6 +22,8 @@ pub struct Config {
     pub backup: Backup,
     #[serde(default)]
     pub certs: Certs,
+    #[serde(default)]
+    pub iota: Iota,
 }
 
 /// 登录安全配置。
@@ -262,6 +264,7 @@ impl Default for Config {
             database: Database::default(),
             backup: Backup::default(),
             certs: Certs::default(),
+            iota: Iota::default(),
         }
     }
 }
@@ -452,4 +455,55 @@ fn d_bcron() -> String {
 }
 fn d_certs_dir() -> String {
     format!("{}/certs", crate::config::Config::panel_dir())
+}
+
+/// IotaPanel 兼容运行时（独立进程插件）配置。
+///
+/// 对齐 IotaPanel 的插件协议：目录下 `plugins/<name>/manifest.yaml` + `bin/<command>`，
+/// 面板分配端口并注入 `PLUGIN_PORT`/`PLUGIN_NAME` 等环境变量，网关 `/p/<name>/*` 反向代理。
+#[derive(Debug, Clone, Deserialize)]
+pub struct Iota {
+    /// 插件根目录（相当于 IotaPanel 的 PANEL_HOME）。默认 `<panel_dir>/iota`。
+    #[serde(default = "d_iota_home")]
+    pub home: String,
+    /// 网关反向代理路由前缀（与 IotaPanel 一致，默认 `/p`）。
+    #[serde(default = "d_iota_prefix")]
+    pub prefix: String,
+    /// 端口池下限。默认 20000。
+    #[serde(default = "d_iota_port_lo")]
+    pub port_lo: u16,
+    /// 端口池上限。默认 21999。
+    #[serde(default = "d_iota_port_hi")]
+    pub port_hi: u16,
+    /// 空闲退出时间（秒）。0 表示不自动退出。默认 300。
+    #[serde(default = "d_iota_idle")]
+    pub idle_secs: u64,
+}
+
+impl Default for Iota {
+    fn default() -> Self {
+        Iota {
+            home: d_iota_home(),
+            prefix: d_iota_prefix(),
+            port_lo: d_iota_port_lo(),
+            port_hi: d_iota_port_hi(),
+            idle_secs: d_iota_idle(),
+        }
+    }
+}
+
+fn d_iota_home() -> String {
+    format!("{}/iota", crate::config::Config::panel_dir())
+}
+fn d_iota_prefix() -> String {
+    "/p".to_string()
+}
+fn d_iota_port_lo() -> u16 {
+    20000
+}
+fn d_iota_port_hi() -> u16 {
+    21999
+}
+fn d_iota_idle() -> u64 {
+    300
 }

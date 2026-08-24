@@ -31,6 +31,7 @@ pub struct State {
     pub shop: Arc<crate::shop::Shop>,
     pub plugins: Arc<crate::plugins::Plugins>,
     pub auth: Arc<crate::auth::SecurityGuard>,
+    pub iota: Arc<crate::iota::Manager>,
     pub tls: crate::tls::Server,
 }
 
@@ -46,6 +47,7 @@ pub fn serve(cfg: Config) -> std::io::Result<()> {
     crate::api::backup_config_init(&cfg);
     crate::api::config_init(&cfg);
     let auth = Arc::new(crate::auth::SecurityGuard::new(cfg.security.clone()));
+    let iota = crate::iota::Manager::load(cfg.iota.clone());
     let tls = crate::tls::Server::build(&cfg.server.tls)?;
     let addr = format!("{}:{}", cfg.server.bind, cfg.server.port);
     let listener = TcpListener::bind(&addr)?;
@@ -61,6 +63,7 @@ pub fn serve(cfg: Config) -> std::io::Result<()> {
         shop,
         plugins,
         auth,
+        iota,
         tls,
     });
 
@@ -247,6 +250,37 @@ fn handle(stream: &mut dyn Io, state: &State) {
             let _ = respond(stream, "400 Bad Request", "text/plain; charset=utf-8", b"missing path\n");
         }
         return;
+    }
+
+    // IotaPanel 兼容网关：`<prefix>/<name>/*` 反向代理到插件进程端口（冷启动 + WS 透传）。
+    {
+        let prefix = &state.cfg.iota.prefix;
+        let is_prefix = target.starts_with(prefix.as_str())
+            && (target.len() == prefix.len() || target.as_bytes().get(prefix.len()).copied() == Some(b'/'));
+        if is_prefix {
+            // 请求头 `\r\n\r\n` 之后的多余字节（升级请求可能带早期帧）一并透传。
+            let raw = &buf[..n.min(MAX_REQ)];
+            let extra: Vec<u8> = match raw.windows(4).position(|w| w == b"\r\n\r\n") {
+                Some(i) => raw[i + 4..].to_vec(),
+                None => Vec::new(),
+            };
+            let resp = crate::iota::gateway_proxy(
+                &state.cfg.iota,
+                &state.iota,
+                &method,
+                target,
+                &head,
+                &body,
+                &extra,
+                stream,
+                state.tls.enabled(),
+            );
+            // 网关正常时已把响应直接写回 stream（resp 为空）；非空表示需托管回写。
+            if !resp.is_empty() {
+                let _ = respond(stream, "200 OK", "application/json; charset=utf-8", resp.as_bytes());
+            }
+            return;
+        }
     }
 
     // /api/* 端点：JSON 数据或操作。

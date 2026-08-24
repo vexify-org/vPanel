@@ -13,6 +13,7 @@ mod db;
 mod env;
 mod extra;
 mod http;
+mod iota;
 mod json;
 mod lang;
 mod mcp;

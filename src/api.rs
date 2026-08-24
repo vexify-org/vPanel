@@ -111,6 +111,48 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
             }
         }
         target if target.starts_with("/api/plugin/") => plugin_call(target, body, state),
+        "/api/iota" => state.iota.list_json(),
+        "/api/iota/status" => {
+            let q = question_query(qs);
+            let name = q_get(&q, "name").unwrap_or("").trim().to_string();
+            if name.is_empty() {
+                err("缺少 name")
+            } else {
+                state.iota.status_json(&name)
+            }
+        }
+        "/api/iota/log" => {
+            let q = question_query(qs);
+            let name = q_get(&q, "name").unwrap_or("").trim().to_string();
+            let n: usize = q_get(&q, "n").and_then(|x| x.parse().ok()).unwrap_or(40);
+            if name.is_empty() {
+                err("缺少 name")
+            } else {
+                state.iota.log_tail_json(&name, n)
+            }
+        }
+        "/api/iota/start" => iota_name_op(state, body, |m, n| m
+            .start(n)
+            .map(|(_, p)| (true, format!("插件 {} 已启动（端口 {p}）", n)))
+            .unwrap_or_else(|e| (false, e))),
+        "/api/iota/stop" => iota_name_op(state, body, |m, n| m.stop(n)),
+        "/api/iota/restart" => iota_name_op(state, body, |m, n| m.restart(n)),
+        "/api/iota/keepalive" => iota_keepalive_op(state, body),
+        "/api/iota/uninstall" => iota_name_op(state, body, |m, n| m.uninstall(n)),
+        "/api/iota/install_url" => {
+            if method != "POST" {
+                err("需要 POST")
+            } else {
+                let fields = json::parse_form(body);
+                let url = json::form_get(&fields, "url").unwrap_or("").trim().to_string();
+                let sha = json::form_get(&fields, "sha256").unwrap_or("").trim().to_string();
+                if url.is_empty() {
+                    err("缺少 url")
+                } else {
+                    ok_bool2(state.iota.install_url(&url, &sha))
+                }
+            }
+        }
         _ => {
             if method == "POST" {
                 action_route(trg, body, qs)
@@ -120,6 +162,38 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
         }
     };
     resp.into_bytes()
+}
+
+/// iota 按名字的单参数操作（start/stop/restart/uninstall）。
+fn iota_name_op<F>(state: &crate::http::State, body: &[u8], f: F) -> String
+where
+    F: Fn(&crate::iota::Manager, &str) -> (bool, String),
+{
+    let fields = json::parse_form(body);
+    let name = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+    if name.is_empty() {
+        return err("缺少 name");
+    }
+    let (ok, msg) = f(&state.iota, &name);
+    ok_bool(ok, msg)
+}
+
+/// iota 保活开关。
+fn iota_keepalive_op(state: &crate::http::State, body: &[u8]) -> String {
+    let fields = json::parse_form(body);
+    let name = json::form_get(&fields, "name").unwrap_or("").trim().to_string();
+    if name.is_empty() {
+        return err("缺少 name");
+    }
+    let on = json::form_get(&fields, "on").unwrap_or("0").trim() == "1"
+        || json::form_get(&fields, "on").unwrap_or("0").trim() == "true";
+    let (ok, msg) = state.iota.set_keepalive(&name, on);
+    ok_bool(ok, msg)
+}
+
+/// `(bool, String)` -> 结果 JSON（与 dbj 等效）。
+fn ok_bool2(r: (bool, String)) -> String {
+    ok_bool(r.0, r.1)
 }
 
 /// 解析 URL 查询串（'&' 分隔、'=' 赋值）为键值映射。
