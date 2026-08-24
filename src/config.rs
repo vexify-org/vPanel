@@ -109,6 +109,9 @@ pub struct Download {
     /// 软件商店清单仓库，形如 "owner/repo@branch"。空则用默认。
     #[serde(default = "d_store")]
     pub store: String,
+    /// 插件商店里 `kind: docker` 的包解压目标目录。默认 `/docker`。
+    #[serde(default = "d_docker_dir")]
+    pub docker_dir: String,
 }
 
 /// Web 终端（本地 Shell 控制）。
@@ -225,6 +228,7 @@ impl Default for Download {
         Download {
             accel: d_accel(),
             store: d_store(),
+            docker_dir: d_docker_dir(),
         }
     }
 }
@@ -259,6 +263,10 @@ fn d_accel() -> String {
 
 fn d_store() -> String {
     crate::shop::DEFAULT_STORE.to_string()
+}
+
+fn d_docker_dir() -> String {
+    "/docker".to_string()
 }
 
 fn d_bind() -> String {

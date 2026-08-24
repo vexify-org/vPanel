@@ -171,7 +171,19 @@ struct StoreItem {
     #[serde(default)]
     desc: String,
     /// 仓库内插件清单相对路径，如 `plugins/demo.yml`。
+    #[serde(default)]
     file: String,
+    /// 直链 zip（仓库内相对路径或 http(s) 完整地址）。填了则「一律整包下载」，
+    /// 不再拉单个 yml；自研加速前缀会自动套在相对路径上。
+    #[serde(default)]
+    zip: String,
+    /// 包类型：`plugin`（落到插件目录，默认）或 `docker`（落到 docker 目录）。
+    #[serde(default = "d_kind")]
+    kind: String,
+}
+
+fn d_kind() -> String {
+    "plugin".to_string()
 }
 
 /// plugins.yml 顶层结构。
@@ -646,11 +658,13 @@ impl Plugins {
             .iter()
             .map(|i| {
                 format!(
-                    "{{\"id\":\"{}\",\"name\":\"{}\",\"desc\":\"{}\",\"file\":\"{}\"}}",
+                    "{{\"id\":\"{}\",\"name\":\"{}\",\"desc\":\"{}\",\"file\":\"{}\",\"zip\":\"{}\",\"kind\":\"{}\"}}",
                     json::jesc(&i.id),
                     json::jesc(&i.name),
                     json::jesc(&i.desc),
-                    json::jesc(&i.file)
+                    json::jesc(&i.file),
+                    json::jesc(&i.zip),
+                    json::jesc(&i.kind)
                 )
             })
             .collect();
@@ -661,16 +675,31 @@ impl Plugins {
         )
     }
 
-    /// 从商店下载插件 yml 到插件目录并热重载。相当于「安装」或「更新/升级」。
+    /// 从商店安装 / 更新插件。
+    ///
+    /// 条目带 `zip` 直链时「一律整包下载」：下载整个 zip，再按 `kind` 解压到
+    /// docker 目录（docker 类）或插件目录（plugin 类）。否则退回旧逻辑：
+    /// 下载单个插件 yml 并热重载。
     pub fn store_install(&self, id: &str, cfg: &Config) -> (bool, String) {
         self.store_fetch(cfg);
-        let (file, accel) = {
+        let item = {
             let c = self.store.lock().unwrap();
             match c.items.iter().find(|i| i.id == id) {
-                Some(i) => (i.file.clone(), accel_of(cfg)),
+                Some(i) => i.clone(),
                 None => return (false, format!("商店里没有插件 {}", id)),
             }
         };
+        let accel = accel_of(cfg);
+
+        // 整包 zip 优先。
+        if !item.zip.is_empty() {
+            return self.install_zip(&item, &accel, cfg);
+        }
+
+        let file = item.file.clone();
+        if file.is_empty() {
+            return (false, format!("商店条目 {} 未配置插件文件或 zip", id));
+        }
         let url = raw_url(cfg, &file, &accel);
         let dl = std::process::Command::new("curl")
             .args(["-fsSL", "--max-time", "20", &url])
@@ -695,6 +724,43 @@ impl Plugins {
         self.reload(&cfg.plugins.dir);
         self.push_log("panel", format!("已安装/更新插件 {} -> {}", id, dest));
         (true, format!("插件 {} 已安装到 {}", id, dest))
+    }
+
+    /// 下载整个 zip 并按 `kind` 解压到目标目录。
+    fn install_zip(&self, item: &StoreItem, accel: &str, cfg: &Config) -> (bool, String) {
+        let url = zip_url(cfg, &item.zip, accel);
+        let tmp = std::env::temp_dir().join(format!("vpanel_plugin_{}_{}.zip", std::process::id(), item.id));
+        let dl = std::process::Command::new("curl")
+            .args(["-fsSL", "--max-time", "120", "-o"])
+            .arg(&tmp)
+            .arg(&url)
+            .status();
+        if !matches!(dl, Ok(s) if s.success()) {
+            let _ = std::fs::remove_file(&tmp);
+            return (false, format!("下载 zip 失败: {}", url));
+        }
+        // 目标目录：docker 类落到 docker 目录，插件类落到插件目录。
+        let (dest, is_docker) = if item.kind == "docker" {
+            (cfg.download.docker_dir.trim_end_matches('/').to_string(), true)
+        } else {
+            (cfg.plugins.dir.trim_end_matches('/').to_string(), false)
+        };
+        let _ = std::fs::create_dir_all(&dest);
+        let r = unzip_to(&tmp, &dest);
+        let _ = std::fs::remove_file(&tmp);
+        match r {
+            Ok(()) => {
+                if is_docker {
+                    self.push_log("panel", format!("已部署 docker 包 {} -> {}", item.id, dest));
+                    (true, format!("Docker 包 {} 已解压到 {}", item.id, dest))
+                } else {
+                    self.reload(&cfg.plugins.dir);
+                    self.push_log("panel", format!("已安装/更新插件包 {} -> {}", item.id, dest));
+                    (true, format!("插件包 {} 已解压到 {}", item.id, dest))
+                }
+            }
+            Err(e) => (false, format!("解压失败: {}", e)),
+        }
     }
 
     /// 卸载插件：删除其 yml 文件并热重载，内存随即释放。
@@ -872,6 +938,35 @@ fn raw_url(cfg: &Config, file: &str, accel: &str) -> String {
         "{}https://raw.githubusercontent.com/{}/refs/heads/{}/{}",
         accel, path, branch, file
     )
+}
+
+/// zip 直链的下载地址：相对路径走加速 raw（仓库内），http(s) 绝对链接原样使用。
+fn zip_url(cfg: &Config, zip: &str, accel: &str) -> String {
+    let t = zip.trim();
+    if t.starts_with("http://") || t.starts_with("https://") {
+        t.to_string()
+    } else {
+        // 仓库内相对路径：加速前缀 + raw.github，与 plugins.yml 同理。
+        raw_url(cfg, zip, accel)
+    }
+}
+
+/// 解压 zip 到目标目录（用系统 `unzip`，保持二进制为零额外依赖）。
+fn unzip_to(zip: &std::path::Path, dest: &str) -> std::io::Result<()> {
+    let st = std::process::Command::new("unzip")
+        .args(["-o", "-q"])
+        .arg(zip)
+        .arg("-d")
+        .arg(dest)
+        .status()?;
+    if st.success() {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "系统缺少 unzip 或解压失败",
+        ))
+    }
 }
 
 /// 内置兜底：商店仓库不可用时为空（在线安装依赖远程仓库）。
