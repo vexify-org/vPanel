@@ -665,15 +665,18 @@ impl Manager {
                 return (false, "安装落盘失败".to_string());
             }
         }
-        // bin 目录加执行权限。
+        // bin 目录加执行权限（仅 Unix；Windows 按扩展名可执行，无需 chmod）。
+        #[cfg(unix)]
+        let set_mode = |p: &std::path::Path| -> std::io::Result<()> {
+            std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o755))
+        };
+        #[cfg(not(unix))]
+        let set_mode = |_p: &std::path::Path| -> std::io::Result<()> { Ok(()) };
         let bin = dest.join("bin");
         if bin.is_dir() {
             if let Ok(rd) = std::fs::read_dir(&bin) {
                 for e in rd.flatten() {
-                    let _ = std::fs::set_permissions(
-                        e.path(),
-                        std::fs::Permissions::from_mode(0o755),
-                    );
+                    let _ = set_mode(&e.path());
                 }
             }
         }
@@ -730,6 +733,7 @@ impl Manager {
     }
 }
 
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
 // ---------------------------------------------------------------------------
