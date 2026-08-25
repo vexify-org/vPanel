@@ -24,6 +24,7 @@ mod ops2;
 mod ops3;
 mod panel;
 mod plugins;
+mod proxy;
 mod shop;
 mod ssl;
 mod security;
@@ -289,3 +290,4 @@ fn print_usage() {
         env!("CARGO_PKG_VERSION")
     );
 }
+

@@ -54,6 +54,7 @@ pub struct State {
     pub auth: Arc<crate::auth::SecurityGuard>,
     pub iota: Arc<crate::iota::Manager>,
     pub tls: crate::tls::Server,
+    pub proxies: Arc<crate::proxy::Proxies>,
 }
 
 /// 启动监听并派发工作线程。阻塞运行，直到进程退出。
@@ -70,6 +71,7 @@ pub fn serve(cfg: Config) -> std::io::Result<()> {
     let iota = crate::iota::Manager::load(cfg.iota.clone());
     let tls = crate::tls::Server::build(&cfg.server.tls)?;
     let addr = format!("{}:{}", cfg.server.bind, cfg.server.port);
+    let proxies = crate::proxy::Proxies::new(&cfg);
     let listener = TcpListener::bind(&addr)?;
     listener.set_nonblocking(true)?;
 
@@ -85,6 +87,7 @@ pub fn serve(cfg: Config) -> std::io::Result<()> {
         auth,
         iota,
         tls,
+        proxies,
     });
 
     // 有界队列：高并发时连接在此排队或直接拒绝，内存不随之膨胀。
@@ -308,6 +311,22 @@ fn handle(stream: &mut dyn Io, state: &State) {
             }
             return;
         }
+    }
+
+    // 路径式反向代理网关：命中前缀则把请求转给配置的目标服务（TLS 复用面板自身）。
+    if let Some(def) = state.proxies.match_prefix(&target) {
+        let raw = &buf[..n.min(MAX_REQ)];
+        let extra: Vec<u8> = match raw.windows(4).position(|w| w == b"\r\n\r\n") {
+            Some(i) => raw[i + 4..].to_vec(),
+            None => Vec::new(),
+        };
+        let resp = crate::proxy::forward(
+            &def, &method, &target, &head, &body, &extra, stream, state.tls.enabled(),
+        );
+        if !resp.is_empty() {
+            let _ = respond(stream, "200 OK", "application/json; charset=utf-8", resp.as_bytes());
+        }
+        return;
     }
 
     // /api/* 端点：JSON 数据或操作。

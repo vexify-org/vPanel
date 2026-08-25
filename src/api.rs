@@ -154,6 +154,42 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
                 }
             }
         }
+        "/api/proxy" => state.proxies.list_json(),
+        "/api/proxy/add" => {
+            if method != "POST" {
+                err("需要 POST")
+            } else {
+                let fields = json::parse_form(body);
+                let prefix = json::form_get(&fields, "prefix").unwrap_or("").trim().to_string();
+                let target = json::form_get(&fields, "target").unwrap_or("").trim().to_string();
+                if prefix.is_empty() || target.is_empty() {
+                    err("缺少 prefix 或 target")
+                } else {
+                    state.proxies.add_json(&prefix, &target)
+                }
+            }
+        }
+        "/api/proxy/del" => {
+            if method != "POST" {
+                err("需要 POST")
+            } else {
+                let fields = json::parse_form(body);
+                let prefix = json::form_get(&fields, "prefix").unwrap_or("").trim().to_string();
+                if prefix.is_empty() {
+                    err("缺少 prefix")
+                } else {
+                    state.proxies.del_json(&prefix)
+                }
+            }
+        }
+        "/api/system/restart" => {
+            if method != "POST" {
+                err("需要 POST")
+            } else {
+                let (ok, msg) = crate::system::self_restart();
+                ok_bool(ok, msg)
+            }
+        }
         _ => {
             if method == "POST" {
                 action_route(trg, body, qs)

@@ -8,6 +8,36 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+/// 重启面板自身（对齐 iotapanel 的 /api/system/restart）：
+/// 从 /proc/self/cmdline 重建启动参数，挂一个延迟 exec 的后台进程后当前进程退出。
+pub fn self_restart() -> (bool, String) {
+    let cmdline = std::fs::read("/proc/self/cmdline").unwrap_or_default();
+    let argv: Vec<String> = cmdline
+        .split(|b| *b == 0)
+        .filter(|p| !p.is_empty())
+        .map(|p| String::from_utf8_lossy(p).into_owned())
+        .collect();
+    if argv.is_empty() {
+        return (false, "无法读取启动参数".to_string());
+    }
+    let quoted: Vec<String> = argv
+        .iter()
+        .map(|a| format!("'{}'", a.replace('\'', "'\\''")))
+        .collect();
+    let cmd = format!("(sleep 0.3; exec {} >/dev/null 2>&1 </dev/null &)", quoted.join(" "));
+    let ok = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(&cmd)
+        .spawn()
+        .map(|_| true)
+        .unwrap_or(false);
+    if ok {
+        (true, "重启中…请稍后刷新".to_string())
+    } else {
+        (false, "启动重启失败".to_string())
+    }
+}
+
 /// 实时监控器，由后台线程每 1s 采样更新。
 pub struct Monitor {
     pub cpu: Mutex<VecDeque<f32>>,        // CPU 使用率 % 历史

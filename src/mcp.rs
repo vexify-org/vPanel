@@ -141,6 +141,11 @@ fn tools_list(id: Option<i64>, state: &State) -> String {
         ("iota_uninstall","卸载插件，参数 name","{\"name\":{\"type\":\"string\"}}"),
         ("iota_keepalive","设置插件保活，参数 name 与 on(布尔)","{\"name\":{\"type\":\"string\"},\"on\":{\"type\":\"boolean\"}}"),
         ("iota_install_url","从 URL 安装插件，参数 url 与 sha256(可选)","{\"url\":{\"type\":\"string\"},\"sha256\":{\"type\":\"string\"}}"),
+        // ---- HTTPS 反向代理网关（iotapanel https-front）----
+        ("proxy_list","列出所有反向代理规则","{}"),
+        ("proxy_add","添加反向代理规则，参数 prefix(/ 开头路径) 与 target(host:port)","{\"prefix\":{\"type\":\"string\"},\"target\":{\"type\":\"string\"}}"),
+        ("proxy_del","删除反向代理规则，参数 prefix","{\"prefix\":{\"type\":\"string\"}}"),
+        ("system_restart","重启面板自身（对齐 iotapanel /api/system/restart）","{}"),
         // ---- 插件商店 & KV ----
         ("plugin_store","列出插件商店软件","{}"),
         ("plugin_store_install","从商店安装插件，参数 id","{\"id\":{\"type\":\"string\"}}"),
@@ -605,6 +610,8 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
     // iota
     let url = arg_str(&args, "url");
     let sha256 = arg_str(&args, "sha256");
+    // 反向代理
+    let prefix = arg_str(&args, "prefix");
     // ops2 / ops3 新增参数
     let iface = arg_str(&args, "iface");
     let point = arg_str(&args, "point");
@@ -778,6 +785,14 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
         "iota_uninstall" => state.iota.uninstall(&fname),
         "iota_keepalive" => state.iota.set_keepalive(&fname, enable),
         "iota_install_url" => state.iota.install_url(&url, &sha256),
+        // ---- HTTPS 反向代理网关 ----
+        "proxy_list" => (true, state.proxies.list_json()),
+        "proxy_add" => (true, state.proxies.add_json(&prefix, &target)),
+        "proxy_del" => (true, state.proxies.del_json(&prefix)),
+        "system_restart" => {
+            let (ok, msg) = crate::system::self_restart();
+            (ok, msg)
+        }
         // ---- 插件商店 / KV / 启停 ----
         "plugin_store" => (true, state.plugins.store_list_json(&state.cfg)),
         "plugin_store_install" => state.plugins.store_install(&env_id, &state.cfg),

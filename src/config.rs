@@ -150,6 +150,18 @@ pub struct Server {
     /// 内置 HTTPS：TLS 终结。
     #[serde(default)]
     pub tls: Tls,
+    /// 路径式反向代理（对齐 iotapanel 的 https-front）：把面板自身端口上的
+    /// 某个路径前缀反代到任意本机 TCP 服务；无需额外监听线程，TLS 复用上面 tls。
+    #[serde(default)]
+    pub proxies: Vec<ProxyDef>,
+}
+
+/// 一条反向代理规则：`prefix` 路径前缀 → `target`（host:port），如
+/// `{ prefix: "/app", target: "127.0.0.1:8088" }`。
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProxyDef {
+    pub prefix: String,
+    pub target: String,
 }
 
 /// 内置 HTTPS 配置（对齐 iotapanel 的 https-front）。
@@ -204,6 +216,7 @@ impl Default for Server {
             workers: d_workers(),
             backlog: d_backlog(),
             tls: Tls::default(),
+            proxies: Vec::new(),
         }
     }
 }
@@ -250,6 +263,7 @@ impl Default for Config {
                 workers: d_workers(),
                 backlog: d_backlog(),
                 tls: Tls::default(),
+                proxies: Vec::new(),
             },
             panel: Panel {
                 title: d_title(),

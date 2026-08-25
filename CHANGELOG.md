@@ -4,7 +4,22 @@
 > 记录约定：按 `语义化版本` 组织，`v1.3.0` 为当前主干版本；往下为规划中的目标版本（对标宝塔能力补全）。
 > 内存目标：常驻内存 ≤ 10MB（release 精简构建实际 ≈2MB）。
 
-## v1.4.4（当前）
+## v1.4.5（当前）
+
+对标 IotaPanel 补齐「HTTPS 反代网关 + URL 装插件 + 系统重启 + 安全」能力，并新增管理端点。
+
+- **HTTPS 反代网关（`https-front` 对齐）**：新增 `server.proxies` 路径前缀 → 本机服务映射；
+  复用面板内置 TLS 终结做路径式反代，不新开监听线程，不占额外进程。
+- **URL 装插件包（`install_url`）**：从 URL / GitHub Release 直接安装独立进程插件包
+  `.tar.gz`，支持可选 SHA256 校验。
+- **系统重启（`/api/system/restart`）**：从 `/proc/self/cmdline` 重建启动参数并延迟 exec，
+  无需 systemd 也能自重启。
+- **新增管理端点**：
+  - MCP：`proxy_list` / `proxy_add` / `proxy_del` / `system_restart`
+  - HTTP：`/api/proxy` / `/api/proxy/add` / `/api/proxy/del` / `/api/system/restart`
+- 实测反向代理可命中 `/app/*` 转发到本机 9088；release 常驻 RSS 稳定 **~1.2MB**。
+
+## v1.4.4
 
 修好 Web 终端：默认构建直接可用，前/后端都做了加固。
 
