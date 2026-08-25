@@ -1,6 +1,6 @@
 [package]
 name = "vpanel"
-version = "1.4.5"
+version = "1.5.0"
 edition = "2021"
 description = "vPanel: a tiny, low-memory HTTP dashboard panel with YAML config, built in pure Rust."
 
