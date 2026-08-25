@@ -20,6 +20,8 @@ mod mcp;
 mod monitor;
 mod nginx;
 mod ops;
+mod ops2;
+mod ops3;
 mod panel;
 mod plugins;
 mod shop;
