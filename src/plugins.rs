@@ -631,7 +631,7 @@ impl Plugins {
         let accel = accel_of(cfg);
         let url = store_list_url(cfg, &accel);
         if let Ok(o) = std::process::Command::new("curl")
-            .args(["-fsSL", "--max-time", "4", &url])
+            .args(["-fsSL", "--max-time", "15", &url])
             .output()
         {
             if o.status.success() {
@@ -972,8 +972,12 @@ fn unzip_to(zip: &std::path::Path, dest: &str) -> std::io::Result<()> {
     }
 }
 
-/// 内置兜底：商店仓库不可用时为空（在线安装依赖远程仓库）。
+/// 内置兜底：优先解析仓库自带完整 `plugins.yml`（编译期嵌入），
+/// 保证商店仓库不可用时插件商店仍有完整列表；解析失败才回退空清单。
 fn default_store() -> Vec<StoreItem> {
+    if let Ok(f) = serde_yaml::from_str::<StoreFile>(include_str!("../.vp-store/plugins.yml")) {
+        return f.plugins;
+    }
     Vec::new()
 }
 

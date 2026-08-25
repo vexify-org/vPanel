@@ -68,9 +68,9 @@ impl Shop {
         }
         let accel = accel_of(cfg);
         let url = make_list_url(&cfg, &accel);
-        // 尝试远程拉取清单。
+        // 尝试远程拉取清单。清单可达 1MB+，慢网络下 4s 超时过短，放宽到 15s。
         if let Ok(o) = std::process::Command::new("curl")
-            .args(["-fsSL", "--max-time", "4", &url])
+            .args(["-fsSL", "--max-time", "15", &url])
             .output()
         {
             if o.status.success() {
@@ -197,9 +197,13 @@ fn chunk_tail(stdout: &[u8], stderr: &[u8], max: usize) -> String {
 pub const DEFAULT_ACCEL: &str = "https://g.z321.cc.cd/";
 pub const DEFAULT_STORE: &str = "vexify-org/vp-store@main";
 
-/// 内置兜底清单：远程仓库（vp-store）不可用时的常用软件。
-/// 仓库 apps.yml 会成为首选来源，这里仅保证面板开箱即用。
+/// 内置兜底清单：优先解析仓库自带完整 `apps.yml`（编译期嵌入，约 5000 应用），
+/// 保证远程仓库（vp-store）不可用时面板依然拥有完整的软件商店；解析失败才回退极致精简的常用 8 项。
 fn default_apps() -> Vec<App> {
+    // 编译期嵌入仓库 `.vp-store/apps.yml`，随二进制分发，离线也可用完整商店。
+    if let Ok(f) = serde_yaml::from_str::<AppsFile>(include_str!("../.vp-store/apps.yml")) {
+        return f.apps;
+    }
     vec![
         App { id: "nginx".into(), name: "Nginx".into(), desc: "高性能 Web / 反向代理服务器".into(), script: "set -e\napt-get update -qq\napt-get install -y -qq nginx\n".into() },
         App { id: "php".into(), name: "PHP (FPM)".into(), desc: "PHP 脚本运行时 + 常用扩展".into(), script: "set -e\napt-get update -qq\nDEBIAN_FRONTEND=noninteractive apt-get install -y -qq php-fpm php-cli php-mysql php-curl php-gd php-intl php-mbstring php-xml php-zip php-redis\nsystemctl enable php-fpm 2>/dev/null || true\n".into() },
