@@ -39,7 +39,7 @@ sha256sum -c SHA256SUMS
 
 ```bash
 # 将公钥放入 /etc/apk/keys 后，直接从本地包安装
-apk add vpanel-aarch64-1.5.0-r0.apk   # 按架构选择
+apk add vpanel-x86_64-1.5.0-r0.apk   # 按架构选择
 ```
 
 ### 从源码构建
