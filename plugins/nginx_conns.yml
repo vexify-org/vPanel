@@ -1,0 +1,13 @@
+# vPanel 插件：Nginx 连接数
+name: nginx_conns
+version: 1.0.0
+desc: 查看 Nginx 活动连接与工作进程数量
+url: plugins/nginx_conns.yml
+
+tools:
+  - id: conns
+    desc: 返回 Nginx worker 与活动连接概览
+    script: |
+      work = cmd("ps -eo comm 2>/dev/null | grep -c 'nginx: worker'")
+      conn = cmd("curl -s http://127.0.0.1/nginx_status 2>/dev/null | tail -3 || ss -tn state established '( sport = :80 )' 2>/dev/null | grep -c '^ESTAB'")
+      ret("Nginx worker 数: " + trim(work) + "\n活动连接: " + trim(conn))

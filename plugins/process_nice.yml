@@ -1,0 +1,16 @@
+# vPanel 插件：进程优先级
+name: process_nice
+version: 1.0.0
+desc: 查看具有实时(RT)/高优先级(NI<0)的进程
+url: plugins/process_nice.yml
+
+tools:
+  - id: prio
+    desc: 返回 nice 值为负(高优先)或 RT 的进程
+    script: |
+      out = cmd("ps -eo pid,ni,rtprio,comm --no-headers 2>/dev/null | awk '$2<0 || $3>=0{print}' | sort -k2 -n | head -20")
+      if trim(out) == ""
+        ret("无高优先/实时进程")
+      else
+        ret("高优先级进程(PID nice rtprio 名称)：\n" + out)
+      end

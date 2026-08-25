@@ -1,0 +1,12 @@
+# vPanel 插件：交换活动
+name: swap_activity
+version: 1.0.0
+desc: 查看内存换入换出活动与交换压力
+url: plugins/swap_activity.yml
+
+tools:
+  - id: activity
+    desc: 返回累计换入换出页数
+    script: |
+      out = cmd("grep -E '^pswpin|^pswpout' /proc/vmstat | awk '{print $1\"=\"$2\": \"$2/1024\"MBytes\"}'")
+      ret("累计交换活动：\n" + out)

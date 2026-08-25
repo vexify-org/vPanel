@@ -1,0 +1,17 @@
+# vPanel 插件：I/O 繁忙进程
+name: io_busy_procs
+version: 1.0.0
+desc: 查看当前 I/O 等待/磁盘读写的繁忙进程（需 iostat/pidstat）
+url: plugins/io_busy_procs.yml
+
+tools:
+  - id: busy
+    desc: 返回处于 D 状态或高 I/O 的进程
+    script: |
+      out = cmd("ps -eo state,pid,comm,cmd --no-headers 2>/dev/null | grep -E '^D' | head -20")
+      iow = cmd("iostat -x 1 2 2>/dev/null | awk '/avg-cpu/{getline; print}' | tail -1 || echo 需安装sysstat")
+      if trim(out) == "" && endswith(trim(iow), "需安装sysstat")
+        ret("无 I/O 等待进程；" + trim(iow))
+      else
+        ret("I/O 繁忙/不可中断进程：\n" + out + "\nCPU iowait: " + trim(iow))
+      end

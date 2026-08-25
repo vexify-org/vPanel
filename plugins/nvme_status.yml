@@ -1,0 +1,17 @@
+# vPanel 插件：NVMe 设备
+name: nvme_status
+version: 1.0.0
+desc: 查看 NVMe SSD 设备信息与温度
+url: plugins/nvme_status.yml
+
+tools:
+  - id: list
+    desc: 返回 NVMe 设备与健康状态
+    script: |
+      out = cmd("nvme list 2>/dev/null | head -20 || ls /dev/nvme* 2>/dev/null || echo 无NVMe设备")
+      if contains(out, "NVMe设备")
+        ret("无 NVMe 设备")
+      else
+        tmp = cmd("for n in /sys/class/nvme/nvme*/temperature; do [ -f $n ] && echo \"$n: $(( $(cat $n) - 273 )).1°C\"; done")
+        ret("NVMe 设备：\n" + out + "\n温度：" + tmp)
+      end

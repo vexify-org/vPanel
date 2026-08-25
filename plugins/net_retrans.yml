@@ -1,0 +1,12 @@
+# vPanel 插件：TCP 重传
+name: net_retrans
+version: 1.0.0
+desc: 查看 TCP 重传相关统计（检测网络质量）
+url: plugins/net_retrans.yml
+
+tools:
+  - id: stats
+    desc: 返回 TCP RetransSegs/OutSegs 重传率
+    script: |
+      out = cmd("grep -E '^Tcp:(RetransSegs|OutSegs|TCPLostRetransmit)' /proc/net/snmp")
+      ret("TCP 重传统计：\n" + out)

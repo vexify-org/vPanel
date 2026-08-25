@@ -1,0 +1,16 @@
+# vPanel 插件：AppArmor 状态
+name: apparmor_status
+version: 1.0.0
+desc: 查看 AppArmor 文件是否加载及已加载 profile 数
+url: plugins/apparmor_status.yml
+
+tools:
+  - id: status
+    desc: 返回 AppArmor 加载的 profile 数量
+    script: |
+      out = cmd("aa-status 2>/dev/null | head -8 || cat /sys/module/apparmor/parameters/enabled 2>/dev/null")
+      if trim(out) == ""
+        ret("AppArmor 未启用或未安装")
+      else
+        ret("AppArmor 状态：\n" + out)
+      end

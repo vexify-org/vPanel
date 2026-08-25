@@ -1,0 +1,12 @@
+# vPanel 插件：登录历史
+name: login_history
+version: 1.0.0
+desc: 查看系统登录历史（谁在何时登录过）
+url: plugins/login_history.yml
+
+tools:
+  - id: last
+    desc: 返回最近登录记录
+    script: |
+      out = cmd("last -n 15 2>/dev/null || echo 无登录记录")
+      ret("登录历史：\n" + out)

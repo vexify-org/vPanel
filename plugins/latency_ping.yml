@@ -1,0 +1,21 @@
+# vPanel 插件：延迟检测
+name: latency_ping
+version: 1.0.0
+desc: 对目标做 ICMP 延迟测试
+url: plugins/latency_ping.yml
+
+tools:
+  - id: ping
+    desc: Ping 目标 4 次并返回延迟统计
+    params:
+      - id: host
+        name: 目标地址(默认 baidu.com)
+        type: string
+        required: false
+    script: |
+      h = arg("host")
+      if h == ""
+        h = "baidu.com"
+      end
+      out = cmd("ping -c 4 -W 2 '" + h + "' 2>&1 | tail -3")
+      ret("延迟测试 " + h + "：\n" + out)

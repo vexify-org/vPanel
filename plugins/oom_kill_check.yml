@@ -1,0 +1,16 @@
+# vPanel 插件：OOM 检查
+name: oom_kill_check
+version: 1.0.0
+desc: 检查历史是否发生过内存不足被内核杀进程的情况
+url: plugins/oom_kill_check.yml
+
+tools:
+  - id: check
+    desc: 从内核日志检索 OOM 记录
+    script: |
+      out = cmd("dmesg 2>/dev/null | grep -iE 'out of memory|oom-killer|killed process' | tail -15")
+      if trim(out) == ""
+        ret("未发现 OOM 记录，内存良好")
+      else
+        ret("发现 OOM 记录：\n" + out)
+      end

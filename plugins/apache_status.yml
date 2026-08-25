@@ -1,0 +1,13 @@
+# vPanel 插件：Apache 状态
+name: apache_status
+version: 1.0.0
+desc: 检查 Apache 是否运行及版本
+url: plugins/apache_status.yml
+
+tools:
+  - id: status
+    desc: 返回 Apache 版本与运行状态
+    script: |
+      v = cmd("apache2 -v 2>/dev/null | head -1 || httpd -v 2>/dev/null | head -1 || echo Apache未安装")
+      run = cmd("pgrep -c apache2 httpd 2>/dev/null || ps -eo comm 2>/dev/null | grep -cE '^(apache2|httpd)$'")
+      ret("" + trim(v) + "\napache 进程数: " + trim(run))

@@ -1,0 +1,12 @@
+# vPanel 插件：粘滞位目录
+name: sticky_dirs
+version: 1.0.0
+desc: 查看带粘滞位(/tmp 类)的目录及权限
+url: plugins/sticky_dirs.yml
+
+tools:
+  - id: list
+    desc: 返回具有粘滞位(sticky)的目录
+    script: |
+      out = cmd("ls -ld /tmp /var/tmp /dev/shm 2>/dev/null; find / -xdev -type d -perm -1000 2>/dev/null | head -20")
+      ret("粘滞位目录：\n" + out)

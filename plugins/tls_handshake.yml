@@ -1,0 +1,22 @@
+# vPanel 插件：TLS 握手测试
+name: tls_handshake
+version: 1.0.0
+desc: 测试到目标 HTTPS 站点的连接与 TLS 握手耗时
+url: plugins/tls_handshake.yml
+
+tools:
+  - id: handshake
+    desc: 通过 openssl 测量 TLS 握手各阶段耗时
+    params:
+      - id: host
+        name: 域名
+        type: string
+        required: true
+    script: |
+      h = arg("host")
+      out = cmd("echo | timeout 10 openssl s_client -connect '" + h + ":443' 2>&1 | grep -E 'Protocol|Cipher|verify|CONNECTED'")
+      if trim(out) == ""
+        ret("握手失败（可能被墙/端口不通）")
+      else
+        ret("TLS 握手 " + h + "：\n" + out)
+      end

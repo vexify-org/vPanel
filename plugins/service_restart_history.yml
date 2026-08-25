@@ -1,0 +1,13 @@
+# vPanel 插件：服务重启历史
+name: service_restart_history
+version: 1.0.0
+desc: 查看 systemd 记录的服务重启与崩溃历史
+url: plugins/service_restart_history.yml
+
+tools:
+  - id: history
+    desc: 返回各服务的启动次数与上次启动结果
+    script: |
+      out = cmd("systemctl --state=failed --no-legend --plain 2>/dev/null | head -15")
+      rst = cmd("last reboot 2>/dev/null | head -5")
+      ret("失败服务：\n" + trim(out) + "\n重启历史：\n" + trim(rst))

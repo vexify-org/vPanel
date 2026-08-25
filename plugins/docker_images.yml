@@ -1,0 +1,16 @@
+# vPanel 插件：Docker 镜像
+name: docker_images
+version: 1.0.0
+desc: 查看本机 Docker 镜像列表与大小
+url: plugins/docker_images.yml
+
+tools:
+  - id: images
+    desc: 返回全部 Docker 镜像
+    script: |
+      out = cmd("docker images 2>/dev/null || echo Docker不可用")
+      if contains(out, "不可用")
+        ret("" + trim(out))
+      else
+        ret("Docker 镜像：\n" + out)
+      end

@@ -1,0 +1,16 @@
+# vPanel 插件：内核日志尾部
+name: kernel_messages_tail
+version: 1.0.0
+desc: 查看内核日志最后若干条消息（近期驱动/硬件事件）
+url: plugins/kernel_messages_tail.yml
+
+tools:
+  - id: tail
+    desc: 返回 dmesg 最后 15 条
+    script: |
+      out = cmd("dmesg 2>/dev/null | tail -15 || journalctl -k 2>/dev/null | tail -15 || echo 无法读取内核日志")
+      if contains(out, "无法读取")
+        ret("" + trim(out))
+      else
+        ret("内核日志尾部：\n" + out)
+      end

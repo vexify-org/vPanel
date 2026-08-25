@@ -1,0 +1,12 @@
+# vPanel 插件：文件系统类型
+name: fs_types
+version: 1.0.0
+desc: 统计系统挂载的文件系统类型分布
+url: plugins/fs_types.yml
+
+tools:
+  - id: dist
+    desc: 返回各文件系统类型的使用统计
+    script: |
+      out = cmd("awk '{print $3}' /proc/mounts | sort | uniq -c | sort -rn")
+      ret("文件系统类型分布：\n" + out)

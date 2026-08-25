@@ -1,0 +1,23 @@
+# vPanel 插件：Git 状态
+name: git_status
+version: 1.0.0
+desc: 查看系统 Git 版本与各仓库状态
+url: plugins/git_status.yml
+
+tools:
+  - id: version
+    desc: 返回 Git 版本
+    script: |
+      v = cmd("git --version 2>/dev/null || echo Git未安装")
+      ret("" + trim(v))
+  - id: repo
+    desc: 检查指定目录是否为 Git 仓库及分支/状态
+    params:
+      - id: dir
+        name: 仓库目录
+        type: string
+        required: true
+    script: |
+      d = arg("dir")
+      out = cmd("git -C '" + d + "' log --oneline -3 2>&1 && git -C '" + d + "' status --short | head -10")
+      ret("仓库 " + d + "：\n" + out)

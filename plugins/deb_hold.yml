@@ -1,0 +1,16 @@
+# vPanel 插件：apt 锁定包
+name: deb_hold
+version: 1.0.0
+desc: 查看被 hold（锁定版本）的软件包
+url: plugins/deb_hold.yml
+
+tools:
+  - id: list
+    desc: 返回被 apt-mark hold 的软件包
+    script: |
+      out = cmd("apt-mark showhold 2>/dev/null | head -30")
+      if trim(out) == ""
+        ret("无被锁定的软件包")
+      else
+        ret("锁定(hold)的软件包：\n" + out)
+      end

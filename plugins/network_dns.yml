@@ -1,0 +1,16 @@
+# vPanel 插件：DNS 解析配置
+name: network_dns
+version: 1.0.0
+desc: 查看 DNS 服务器配置与解析测试
+url: plugins/network_dns.yml
+
+tools:
+  - id: resolv
+    desc: 返回 /etc/resolv.conf 的 DNS 服务器
+    script: |
+      out = cmd("grep -E '^nameserver|^search' /etc/resolv.conf 2>/dev/null || echo 无resolv")
+      if trim(out) == ""
+        ret("无 DNS 配置")
+      else
+        ret("DNS 配置：\n" + out)
+      end

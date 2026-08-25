@@ -1,0 +1,14 @@
+# vPanel 插件：CPU 核数与型号
+name: cpu_cores
+version: 1.0.0
+desc: 查看 CPU 逻辑核数、物理核数与型号
+url: plugins/cpu_cores.yml
+
+tools:
+  - id: info
+    desc: 返回 CPU 逻辑核数、物理核心与型号
+    script: |
+      n = cmd("nproc")
+      model = cmd("grep -m1 'model name' /proc/cpuinfo | cut -d: -f2")
+      phy = cmd("grep -c '^physical id' /proc/cpuinfo || echo 1")
+      ret("逻辑核数: " + trim(n) + " / 物理核: " + trim(phy) + "\n型号: " + trim(model))

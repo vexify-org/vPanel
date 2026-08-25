@@ -1,0 +1,12 @@
+# vPanel 插件：资源限制 ulimit
+name: ulimit_check
+version: 1.0.0
+desc: 查看当前进程资源软硬限制（文件数/栈/内存）
+url: plugins/ulimit_check.yml
+
+tools:
+  - id: limits
+    desc: 返回 ulimit 关键限制值
+    script: |
+      out = cmd("ulimit -a")
+      ret("当前资源限制：\n" + out)

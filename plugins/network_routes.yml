@@ -1,0 +1,12 @@
+# vPanel 插件：路由表
+name: network_routes
+version: 1.0.0
+desc: 查看内核 IPv4 路由表
+url: plugins/network_routes.yml
+
+tools:
+  - id: route
+    desc: 返回默认与静态路由
+    script: |
+      out = cmd("ip route show 2>/dev/null || route -n 2>/dev/null")
+      ret("路由表：\n" + out)

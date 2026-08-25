@@ -1,0 +1,16 @@
+# vPanel 插件：SSH 算法与横幅
+name: ssh_config_check
+version: 1.0.0
+desc: 检查 SSH 服务端关键安全配置（密码/root/PermitRoot）
+url: plugins/ssh_config_check.yml
+
+tools:
+  - id: check
+    desc: 返回 sshd 关键安全配置项
+    script: |
+      out = cmd("sshd -T 2>/dev/null | grep -E '^(permitrootlogin|passwordauthentication|pubkeyauthentication|x11forwarding|permitemptypasswords|maxauthtries|port)' | head -20")
+      if trim(out) == ""
+        ret("无法读取 sshd 配置（需 root 或 sshd 未安装）")
+      else
+        ret("SSH 安全配置：\n" + out)
+      end

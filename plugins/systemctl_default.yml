@@ -1,0 +1,13 @@
+# vPanel 插件：默认 target
+name: systemctl_default
+version: 1.0.0
+desc: 查看系统默认启动 target（multi-user/graphical）
+url: plugins/systemctl_default.yml
+
+tools:
+  - id: default
+    desc: 返回默认 target 与当前运行 target
+    script: |
+      d = cmd("systemctl get-default 2>/dev/null || echo 无systemd")
+      now = cmd("systemctl 2>/dev/null | grep -oE '(Runlevel [0-9]|graphical.target|multi-user.target)' | head -1")
+      ret("默认 target: " + trim(d) + "\n当前运行: " + trim(now))

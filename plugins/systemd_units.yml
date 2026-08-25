@@ -1,0 +1,21 @@
+# vPanel 插件：systemd 单元
+name: systemd_units
+version: 1.0.0
+desc: 按类型查看已加载的 systemd 单元
+url: plugins/systemd_units.yml
+
+tools:
+  - id: list
+    desc: 列出指定类型的单元(默认 service)
+    params:
+      - id: type
+        name: 单元类型(service/timer/socket/target)
+        type: string
+        required: false
+    script: |
+      t = arg("type")
+      if t == ""
+        t = "service"
+      end
+      out = cmd("systemctl list-units --type=" + t + " --state=active --no-legend --plain 2>/dev/null | awk '{print $1}' | head -40")
+      ret("激活的 " + t + " 单元：\n" + out)

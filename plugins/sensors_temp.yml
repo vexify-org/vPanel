@@ -1,0 +1,16 @@
+# vPanel 插件：传感器温度
+name: sensors_temp
+version: 1.0.0
+desc: 查看主板/CPU 硬件传感器温度（需 lm-sensors）
+url: plugins/sensors_temp.yml
+
+tools:
+  - id: get
+    desc: 返回传感器温度
+    script: |
+      out = cmd("sensors 2>/dev/null | grep -iE 'temp[0-9]+|Core [0-9]|Package id' | head -20")
+      if trim(out) == ""
+        ret("lm-sensors 未安装/未识别传感器")
+      else
+        ret("传感器温度：\n" + out)
+      end

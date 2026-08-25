@@ -1,0 +1,16 @@
+# vPanel 插件：fail2ban 状态
+name: fail2ban_status
+version: 1.0.0
+desc: 查看 fail2ban 服务与封禁的 jail 统计
+url: plugins/fail2ban_status.yml
+
+tools:
+  - id: status
+    desc: 返回 fail2ban 各 jail 的封禁情况
+    script: |
+      out = cmd("fail2ban-client status 2>/dev/null | head -20 || echo fail2ban未安装或未运行")
+      if contains(out, "未")
+        ret("" + trim(out))
+      else
+        ret("fail2ban 状态：\n" + out)
+      end

@@ -1,0 +1,21 @@
+# vPanel 插件：锁定/禁用用户
+name: users_nologin
+version: 1.0.0
+desc: 查看被禁用(nologin/lock)的账户与可使用 shell 的账户
+url: plugins/users_nologin.yml
+
+tools:
+  - id: shell_users
+    desc: 返回可登录(shell 正常)的系统账户
+    script: |
+      out = cmd("grep -E ':(/bin/(ba|z|fis|dash|sh)|/usr/sbin)(/login)?$' /etc/passwd | cut -d: -f1,3 | head -30")
+      ret("可登录账户：\n" + out)
+  - id: locked
+    desc: 返回锁定或 nologin 的账户
+    script: |
+      out = cmd("grep -E '/nologin|/false$' /etc/passwd | cut -d: -f1 | head -20")
+      if trim(out) == ""
+        ret("无 nologin/false 账户")
+      else
+        ret("禁用登录账户：\n" + out)
+      end

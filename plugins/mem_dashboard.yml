@@ -1,0 +1,13 @@
+# vPanel 插件：内存仪表盘
+name: mem_dashboard
+version: 1.0.0
+desc: 内存/交换/分页的一站式仪表盘
+url: plugins/mem_dashboard.yml
+
+tools:
+  - id: dash
+    desc: 返回 free 内存视图与累计分页活动
+    script: |
+      m = cmd("free -h")
+      pg = cmd("grep -E 'pgpg-in|pgpg-out' /proc/vmstat | awk '{sum+=$2} END{print sum}'")
+      ret("" + m + "\n累计分页活动: " + trim(pg))

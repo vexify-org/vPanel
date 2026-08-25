@@ -1,0 +1,12 @@
+# vPanel 插件：bash 配置
+name: shell_rc_check
+version: 1.0.0
+desc: 查看 shell 配置文件关键项（历史命令/别名/超时）
+url: plugins/shell_rc_check.yml
+
+tools:
+  - id: check
+    desc: 返回 /etc/profile.d 与 bashrc 的配置概况
+    script: |
+      out = cmd("ls /etc/profile.d/ 2>/dev/null | head -20; grep -rhE 'HISTSIZE|TIMEOUT|HISTCONTROL' /etc/profile /etc/bash.bashrc 2>/dev/null | grep -v '^#' | head -10")
+      ret("Shell rc 配置：\n" + out)

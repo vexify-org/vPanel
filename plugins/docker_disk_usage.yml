@@ -1,0 +1,16 @@
+# vPanel 插件：Docker 磁盘
+name: docker_disk_usage
+version: 1.0.0
+desc: 查看 Docker 及各容器占用的磁盘空间
+url: plugins/docker_disk_usage.yml
+
+tools:
+  - id: usage
+    desc: 返回 Docker 磁盘占用明细
+    script: |
+      out = cmd("docker system df 2>/dev/null || echo Docker不可用")
+      if contains(out, "不可用")
+        ret("" + trim(out))
+      else
+        ret("Docker 磁盘占用：\n" + out)
+      end

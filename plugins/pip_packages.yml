@@ -1,0 +1,16 @@
+# vPanel 插件：pip 包
+name: pip_packages
+version: 1.0.0
+desc: 查看 Python pip 全局安装的包
+url: plugins/pip_packages.yml
+
+tools:
+  - id: list
+    desc: 返回 pip 全局包列表与版本
+    script: |
+      out = cmd("pip3 list --not-required 2>/dev/null | head -40 || pip list 2>/dev/null | head -40 || echo pip不可用")
+      if contains(out, "不可用")
+        ret("" + trim(out))
+      else
+        ret("pip 全局包：\n" + out)
+      end

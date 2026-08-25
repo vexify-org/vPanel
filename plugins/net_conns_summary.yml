@@ -1,0 +1,13 @@
+# vPanel 插件：连接状态汇总
+name: net_conns_summary
+version: 1.0.0
+desc: 按连接状态统计 TCP 连接分布
+url: plugins/net_conns_summary.yml
+
+tools:
+  - id: summary
+    desc: 返回各 TCP 状态的数量分布
+    script: |
+      out = cmd("ss -tan 2>/dev/null | awk 'NR>1{print $1}' | sort | uniq -c | sort -rn")
+      total = cmd("ss -tan 2>/dev/null | wc -l")
+      ret("TCP 状态分布（总量 " + trim(total) + "）：\n" + out)

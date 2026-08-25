@@ -1,0 +1,18 @@
+# vPanel 插件：今日登录审计
+name: auth_log_today
+version: 1.0.0
+desc: 查看今天的认证相关日志（成功/失败 SSH 登录）
+url: plugins/auth_log_today.yml
+
+tools:
+  - id: auth
+    desc: 返回今天的 SSH 认证成功与失败
+    script: |
+      ok = cmd("grep 'Accepted' /var/log/auth.log 2>/dev/null | grep -c '$(date +%b...%d)'")
+      bad = cmd("grep 'Failed password' /var/log/auth.log 2>/dev/null | grep -c '$(date +%b...%d)'")
+      last = cmd("grep -E 'Accepted|Failed password' /var/log/auth.log 2>/dev/null | tail -8")
+      if trim(bad) == "0" && trim(ok) == "0"
+        ret("今日无 SSH 认证记录（auth.log 可能为空）")
+      else
+        ret("今日 SSH: 成功 " + trim(ok) + " / 失败 " + trim(bad) + "\n最新: \n" + last)
+      end

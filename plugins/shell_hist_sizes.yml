@@ -1,0 +1,16 @@
+# vPanel 插件：Shell 历史
+name: shell_hist_sizes
+version: 1.0.0
+desc: 查看各用户 shell 历史文件大小（排查泄露风险）
+url: plugins/shell_hist_sizes.yml
+
+tools:
+  - id: sizes
+    desc: 返回各用户 history 文件大小
+    script: |
+      out = cmd("ls -lh /home/*/.*history /root/.*history 2>/dev/null | awk '{print $5, $9}'")
+      if trim(out) == ""
+        ret("无历史文件或权限不足")
+      else
+        ret("Shell 历史文件：\n" + out)
+      end

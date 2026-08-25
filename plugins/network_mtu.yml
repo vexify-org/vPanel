@@ -1,0 +1,12 @@
+# vPanel 插件：网卡 MTU
+name: network_mtu
+version: 1.0.0
+desc: 查看网卡 MTU 设置（排查大包/隧道问题）
+url: plugins/network_mtu.yml
+
+tools:
+  - id: mtu
+    desc: 返回各网卡的 MTU 值
+    script: |
+      out = cmd("ip link show 2>/dev/null | grep -E '^[0-9]+:|mtu' | awk '/^[0-9]+:/{gsub(/:/,\"\",$2); n=$2} /mtu/{print n, \"mtu=\" $5}'")
+      ret("网卡 MTU：\n" + out)

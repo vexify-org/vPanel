@@ -1,0 +1,16 @@
+# vPanel 插件：Docker 网络
+name: docker_networks
+version: 1.0.0
+desc: 查看 Docker 网络与连接状态
+url: plugins/docker_networks.yml
+
+tools:
+  - id: nets
+    desc: 返回 Docker 网络列表
+    script: |
+      out = cmd("docker network ls 2>/dev/null || echo Docker不可用")
+      if contains(out, "不可用")
+        ret("" + trim(out))
+      else
+        ret("Docker 网络：\n" + out)
+      end

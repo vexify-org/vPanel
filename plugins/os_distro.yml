@@ -1,0 +1,12 @@
+# vPanel 插件：发行版信息
+name: os_distro
+version: 1.0.0
+desc: 查看操作系统发行版与版本号
+url: plugins/os_distro.yml
+
+tools:
+  - id: info
+    desc: 返回发行版名称与版本
+    script: |
+      id = cmd("grep -E '^(ID|VERSION_ID|PRETTY_NAME)=' /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '\"'")
+      ret("系统信息：\n" + id)

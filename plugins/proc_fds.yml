@@ -1,0 +1,17 @@
+# vPanel 插件：进程文件描述符
+name: proc_fds
+version: 1.0.0
+desc: 检查进程打开的文件描述符总数与占用量最大的进程（排查 fd 泄漏）
+url: plugins/proc_fds.yml
+
+tools:
+  - id: fds
+    desc: 返回总 fd 数与占用最多的 10 个进程
+    script: |
+      total = cmd("find /proc/[0-9]*/fd -maxdepth 1 -type l 2>/dev/null | wc -l")
+      top = cmd("for d in /proc/[0-9]*; do n=$(ls $d/fd 2>/dev/null | wc -l); [ \"$n\" -gt 100 ] && echo \"$n $(basename $d) $(cat $d/comm 2>/dev/null)\"; done | sort -rn | head -10")
+      if trim(top) == ""
+        ret("总 fd 数: " + trim(total) + "，无明显 fd 占用大户")
+      else
+        ret("总 fd 数: " + trim(total) + "\n占用大户(fd数 PID 名称)：\n" + top)
+      end

@@ -1,0 +1,16 @@
+# vPanel 插件：挂载详情
+name: mounts_detail
+version: 1.0.0
+desc: 查看真实设备挂载点（过滤虚拟文件系统）
+url: plugins/mounts_detail.yml
+
+tools:
+  - id: list
+    desc: 返回真实设备挂载概览
+    script: |
+      out = cmd("awk '{print $1, $2, $3}' /proc/mounts | grep -Ev '^(proc|sysfs|cgroup|devpts|tmpfs|overlay|mqueue|devtmpfs|binfmt|tracefs|debugfs|securityfs|pstore)' | head -80")
+      if trim(out) == ""
+        ret("无真实设备挂载")
+      else
+        ret("" + out)
+      end

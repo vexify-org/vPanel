@@ -1,0 +1,16 @@
+# vPanel 插件：磁盘健康 SMART
+name: smart_health
+version: 1.0.0
+desc: 查看磁盘 SMART 健康状态（需 smartctl）
+url: plugins/smart_health.yml
+
+tools:
+  - id: health
+    desc: 返回各磁盘 SMART 总体健康状态
+    script: |
+      out = cmd("for d in $(ls /dev/sd? /dev/vd? 2>/dev/null); do smartctl -H $d 2>/dev/null | grep -E 'SMART overall|result|PASSED|FAILED' | head -1 | sed \"s|^|$d: |\"; done")
+      if trim(out) == ""
+        ret("smartctl 未安装或无可读磁盘")
+      else
+        ret("SMART 健康状态：\n" + out)
+      end

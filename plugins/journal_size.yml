@@ -1,0 +1,17 @@
+# vPanel 插件：systemd journal
+name: journal_size
+version: 1.0.0
+desc: 查看 systemd journal 日志占用与配置上限
+url: plugins/journal_size.yml
+
+tools:
+  - id: size
+    desc: 返回 journal 磁盘占用与限制
+    script: |
+      out = cmd("journalctl --disk-usage 2>/dev/null | tail -1")
+      lim = cmd("grep -E 'SystemMaxUse|MaxRetentionSec' /etc/systemd/journald.conf 2>/dev/null | grep -v '^#' | head -5")
+      if trim(out) == ""
+        ret("journal 不可用或为空")
+      else
+        ret("" + trim(out) + "\n限制配置:\n" + trim(lim))
+      end

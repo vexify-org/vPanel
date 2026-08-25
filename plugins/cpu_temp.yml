@@ -1,0 +1,16 @@
+# vPanel 插件：CPU 温度
+name: cpu_temp
+version: 1.0.0
+desc: 从内核热区读取 CPU 温度（无需额外工具）
+url: plugins/cpu_temp.yml
+
+tools:
+  - id: get
+    desc: 返回 CPU 热区温度
+    script: |
+      out = cmd("for t in /sys/class/thermal/thermal_zone*/temp; do [ -f $t ] && z=$(basename $(dirname $t)) && echo \"$z: $(( $(cat $t) / 1000 ))°C type=$(cat $(dirname $t)/type)\"; done")
+      if trim(out) == ""
+        ret("无热区信息（容器或虚拟化环境）")
+      else
+        ret("CPU/SoC 温度：\n" + out)
+      end

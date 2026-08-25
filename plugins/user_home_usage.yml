@@ -1,0 +1,16 @@
+# vPanel 插件：用户主目录占用
+name: user_home_usage
+version: 1.0.0
+desc: 查看各用户主目录占用的磁盘空间
+url: plugins/user_home_usage.yml
+
+tools:
+  - id: du
+    desc: 返回各用户主目录大小排序
+    script: |
+      out = cmd("du -sh /home/* /root 2>/dev/null | sort -rh | head -20")
+      if trim(out) == ""
+        ret("无主目录或权限不足")
+      else
+        ret("主目录占用：\n" + out)
+      end

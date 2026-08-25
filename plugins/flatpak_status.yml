@@ -1,0 +1,16 @@
+# vPanel 插件：Flatpak 应用
+name: flatpak_status
+version: 1.0.0
+desc: 查看 Flatpak 安装的应用
+url: plugins/flatpak_status.yml
+
+tools:
+  - id: list
+    desc: 返回已安装的 Flatpak 应用
+    script: |
+      out = cmd("flatpak list --app 2>/dev/null | head -30")
+      if trim(out) == ""
+        ret("未安装 Flatpak 或无可列应用")
+      else
+        ret("Flatpak 应用：\n" + out)
+      end

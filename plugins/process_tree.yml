@@ -1,0 +1,16 @@
+# vPanel 插件：进程树
+name: process_tree
+version: 1.0.0
+desc: 查看进程树摘要（顶层进程及后代结构）
+url: plugins/process_tree.yml
+
+tools:
+  - id: tree
+    desc: 返回 pstree 结构（按占用排序的顶层进程）
+    script: |
+      out = cmd("ps -eo pid,ppid,comm --sort=-rss | awk 'NR>1{print $2, $1, $3}' | awk '!seen[$1]++' | head -30")
+      if trim(out) == ""
+        ret("pstree 不可用")
+      else
+        ret("顶层父进程（PID PPID 名称）：\n" + out)
+      end

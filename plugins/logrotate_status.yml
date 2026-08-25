@@ -1,0 +1,13 @@
+# vPanel 插件：logrotate
+name: logrotate_status
+version: 1.0.0
+desc: 检查 logrotate 配置与最近轮转的日志
+url: plugins/logrotate_status.yml
+
+tools:
+  - id: check
+    desc: 返回 logrotate 配置数与最近轮转日志
+    script: |
+      cf = cmd("ls /etc/logrotate.d/ 2>/dev/null | wc -l")
+      rot = cmd("grep -r '/var/log' /etc/logrotate.d /etc/logrotate.conf 2>/dev/null | wc -l")
+      ret("logrotate.d 配置: " + trim(cf) + " 个，覆盖日志条数: " + trim(rot))

@@ -1,0 +1,13 @@
+# vPanel 插件：Go 环境
+name: go_module_cache
+version: 1.0.0
+desc: 查看 Go 工具链版本与模块缓存占用
+url: plugins/go_module_cache.yml
+
+tools:
+  - id: go
+    desc: 返回 Go 版本与模块缓存大小
+    script: |
+      v = cmd("go version 2>/dev/null || echo Go未安装")
+      cache = cmd("du -sh $(go env GOMODCACHE 2>/dev/null) 2>/dev/null | cut -f1 || echo 无")
+      ret("" + trim(v) + "\n模块缓存: " + trim(cache))

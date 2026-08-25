@@ -1,0 +1,17 @@
+# vPanel 插件：nftables 计数
+name: nft_counters
+version: 1.0.0
+desc: 查看 nftables 规则与计数器
+url: plugins/nft_counters.yml
+
+tools:
+  - id: rules
+    desc: 返回 nftables 规则数
+    script: |
+      out = cmd("nft list ruleset 2>/dev/null | grep -c 'chain' || echo 未使用nftables")
+      if contains(out, "未")
+        ret("未使用 nftables（可能用 iptables 内核模块）")
+      else
+        o2 = cmd("nft list ruleset 2>/dev/null | grep -cE '^\s+(meta|tcp|udp|icmp|cnt[^ ]*).*'")
+        ret("nftables 规则 chain 数: " + trim(out) + "，规则条数: " + trim(o2))
+      end

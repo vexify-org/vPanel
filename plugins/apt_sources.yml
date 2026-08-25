@@ -1,0 +1,16 @@
+# vPanel 插件：apt 软件源
+name: apt_sources
+version: 1.0.0
+desc: 查看 apt 软件源配置（排查源失效/加速）
+url: plugins/apt_sources.yml
+
+tools:
+  - id: list
+    desc: 返回启用的软件源行
+    script: |
+      out = cmd("grep -rhE '^(deb|Types:)' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | grep -v '^#' | grep '^deb' | head -30")
+      if trim(out) == ""
+        ret("无 apt 源或非 Debian 系")
+      else
+        ret("apt 软件源：\n" + out)
+      end

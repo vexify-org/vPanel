@@ -1,0 +1,16 @@
+# vPanel 插件：块设备列表
+name: block_devices
+version: 1.0.0
+desc: 列出磁盘/分区设备、大小与挂载点
+url: plugins/block_devices.yml
+
+tools:
+  - id: ls
+    desc: 返回 lsblk 树形设备列表
+    script: |
+      out = cmd("lsblk -o NAME,SIZE,TYPE,MOUNTPOINT 2>/dev/null || fdisk -l 2>/dev/null | head -30")
+      if trim(out) == ""
+        ret("无块设备信息（需安装 lsblk）")
+      else
+        ret("" + out)
+      end

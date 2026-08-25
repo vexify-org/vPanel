@@ -1,0 +1,13 @@
+# vPanel 插件：时区
+name: timezone_info
+version: 1.0.0
+desc: 查看系统时区与当前时间
+url: plugins/timezone_info.yml
+
+tools:
+  - id: get
+    desc: 返回时区名称、当前时间与偏移
+    script: |
+      tz = cmd("cat /etc/timezone 2>/dev/null || timedatectl show -p Timezone 2>/dev/null | cut -d= -f2")
+      now = cmd("date +'%F %T %Z (%z)'")
+      ret("时区: " + trim(tz) + "\n当前时间: " + trim(now))

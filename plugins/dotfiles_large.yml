@@ -1,0 +1,16 @@
+# vPanel 插件：隐藏文件占用
+name: dotfiles_large
+version: 1.0.0
+desc: 扫描各用户主目录下的大体积点文件（.cache/.local 等）
+url: plugins/dotfiles_large.yml
+
+tools:
+  - id: top
+    desc: 返回主目录下占空间最大的隐藏文件/目录
+    script: |
+      out = cmd("du -sh /home/*/.[a-z]* /root/.[a-z]* 2>/dev/null | sort -rh | head -15")
+      if trim(out) == ""
+        ret("无主目录或权限不足")
+      else
+        ret("主目录隐藏文件占用 TOP：\n" + out)
+      end

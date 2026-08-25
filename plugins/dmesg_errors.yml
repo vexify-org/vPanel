@@ -1,0 +1,16 @@
+# vPanel 插件：内核错误
+name: dmesg_errors
+version: 1.0.0
+desc: 查看内核日志中的错误与警告
+url: plugins/dmesg_errors.yml
+
+tools:
+  - id: check
+    desc: 返回 dmesg 中的 error/warn 记录
+    script: |
+      out = cmd("dmesg 2>/dev/null | grep -iE ' error| fail| oops| panic' | tail -15")
+      if trim(out) == ""
+        ret("内核日志无显著错误")
+      else
+        ret("内核错误/警告：\n" + out)
+      end

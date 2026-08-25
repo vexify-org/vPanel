@@ -1,0 +1,13 @@
+# vPanel 插件：/boot 占用
+name: boot_disk_usage
+version: 1.0.0
+desc: 查看 /boot 分区占用与内核数量（排查启动分区满）
+url: plugins/boot_disk_usage.yml
+
+tools:
+  - id: usage
+    desc: 返回 /boot 占用与已装内核数
+    script: |
+      du = cmd("du -sh /boot 2>/dev/null | cut -f1 || echo 无/boot")
+      kern = cmd("ls /boot/vmlinuz-* 2>/dev/null | wc -l")
+      ret("/boot 占用: " + trim(du) + " / 内核数: " + trim(kern))

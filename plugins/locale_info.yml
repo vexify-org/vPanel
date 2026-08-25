@@ -1,0 +1,13 @@
+# vPanel 插件：区域语言
+name: locale_info
+version: 1.0.0
+desc: 查看系统语言/区域设置
+url: plugins/locale_info.yml
+
+tools:
+  - id: get
+    desc: 返回当前 LANG 与可用 locale 数
+    script: |
+      lang = cmd("echo ${LANG:-未设置}")
+      all = cmd("locale -a 2>/dev/null | wc -l")
+      ret("当前 LANG: " + trim(lang) + " / 可用 locale 数: " + trim(all))

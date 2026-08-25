@@ -1,0 +1,12 @@
+# vPanel 插件：本机 IP
+name: network_ips
+version: 1.0.0
+desc: 查看各网卡的 IPv4/IPv6 地址
+url: plugins/network_ips.yml
+
+tools:
+  - id: list
+    desc: 返回所有网卡 IP 地址
+    script: |
+      out = cmd("ip -o addr 2>/dev/null | awk '{print $2, $3, $4}' | grep -v '^lo' || ifconfig -a 2>/dev/null | grep -E '^[a-z]|inet '")
+      ret("网卡 IP 地址：\n" + out)

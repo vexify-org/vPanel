@@ -1,0 +1,16 @@
+# vPanel 插件：缓存占用
+name: cache_usage
+version: 1.0.0
+desc: 查看主要缓存目录占用（apt/pip/npm 等）
+url: plugins/cache_usage.yml
+
+tools:
+  - id: top
+    desc: 返回各缓存目录大小
+    script: |
+      out = cmd("du -sh /var/cache/apt /root/.cache /root/.npm /root/.cache/pip /var/lib/docker 2>/dev/null | sort -rh | head -12")
+      if trim(out) == ""
+        ret("无法读取缓存目录")
+      else
+        ret("缓存占用：\n" + out)
+      end

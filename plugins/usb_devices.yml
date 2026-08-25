@@ -1,0 +1,16 @@
+# vPanel 插件：USB 设备
+name: usb_devices
+version: 1.0.0
+desc: 查看已连接的 USB 设备（检测外部存储/旁路设备）
+url: plugins/usb_devices.yml
+
+tools:
+  - id: list
+    desc: 返回 USB 设备列表
+    script: |
+      out = cmd("lsusb 2>/dev/null | head -30 || cat /proc/bus/usb/devices 2>/dev/null | head -30 || echo 无usb工具")
+      if contains(out, "无usb")
+        ret("无法列出 USB 设备")
+      else
+        ret("USB 设备：\n" + out)
+      end

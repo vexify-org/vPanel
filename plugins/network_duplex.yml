@@ -1,0 +1,17 @@
+# vPanel 插件：网卡链路
+name: network_duplex
+version: 1.0.0
+desc: 查看物理网卡速率与双工模式
+url: plugins/network_duplex.yml
+
+tools:
+  - id: link
+    desc: 返回物理网卡速率与双工模式
+    script: |
+      out = cmd("for i in /sys/class/net/*/device/speed; do [ -f $i ] && echo \"$(basename $(dirname $(dirname $i))) speed=$(cat $i 2>/dev/null)M duplex=$(cat $(dirname $i)/duplex 2>/dev/null)\"; done | grep -v ':speed=0M' | head -20")
+      o2 = cmd("ethtool $(ls /sys/class/net 2>/dev/null | grep eth) 2>/dev/null | grep -E 'Speed|Duplex' | head -2")
+      if trim(out) == ""
+        ret("未取到物理网卡信息")
+      else
+        ret("网卡链路：\n" + out)
+      end

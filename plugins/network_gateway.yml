@@ -1,0 +1,16 @@
+# vPanel 插件：默认网关
+name: network_gateway
+version: 1.0.0
+desc: 查看默认网关及对应网卡
+url: plugins/network_gateway.yml
+
+tools:
+  - id: gw
+    desc: 返回默认网关 IP
+    script: |
+      gw = cmd("ip route show default 2>/dev/null | awk '{print $3, $5}'")
+      if trim(gw) == ""
+        ret("未配置默认网关")
+      else
+        ret("默认网关: " + trim(gw))
+      end

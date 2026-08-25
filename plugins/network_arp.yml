@@ -1,0 +1,16 @@
+# vPanel 插件：ARP 邻居表
+name: network_arp
+version: 1.0.0
+desc: 查看局域网内的 ARP 邻居（检测未知主机）
+url: plugins/network_arp.yml
+
+tools:
+  - id: neigh
+    desc: 返回 ARP/邻居表
+    script: |
+      out = cmd("ip neigh show 2>/dev/null | grep -E 'REACHABLE|STALE' | head -40 || arp -a 2>/dev/null")
+      if trim(out) == ""
+        ret("未发现邻居条目")
+      else
+        ret("邻居表：\n" + out)
+      end

@@ -1,0 +1,17 @@
+# vPanel 插件：PHP 扩展
+name: php_extensions
+version: 1.0.0
+desc: 查看 PHP 已启用的扩展与版本
+url: plugins/php_extensions.yml
+
+tools:
+  - id: modules
+    desc: 返回 PHP 版本与已加载扩展
+    script: |
+      v = cmd("php -v 2>/dev/null | head -1 || echo PHP未安装")
+      if contains(v, "未安装")
+        ret("" + trim(v))
+      else
+        m = cmd("php -m 2>/dev/null | grep -v '^\\[PHP Modules\\]$' | grep -v '^\\[Zend Modules\\]$' | tr '\\n' ' '")
+        ret("" + trim(v) + "\n扩展(" + itoa(atoi(cmd("php -m 2>/dev/null | grep -c .")) - 3) + "): " + trim(m))
+      end

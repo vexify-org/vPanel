@@ -1,0 +1,22 @@
+# vPanel 插件：进程启动参数
+name: proc_cmdline
+version: 1.0.0
+desc: 查看进程的完整启动命令行
+url: plugins/proc_cmdline.yml
+
+tools:
+  - id: cmdline
+    desc: 列出与关键字匹配的进程完整命令行
+    params:
+      - id: name
+        name: 进程关键字(如 nginx/php)
+        type: string
+        required: true
+    script: |
+      n = arg("name")
+      out = cmd("ps -eo pid,args --no-headers 2>/dev/null | grep -i '" + n + "' | grep -v grep")
+      if trim(out) == ""
+        ret("未找到匹配 " + n + " 的进程")
+      else
+        ret("" + out)
+      end

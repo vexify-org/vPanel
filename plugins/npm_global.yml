@@ -1,0 +1,16 @@
+# vPanel 插件：npm 全局包
+name: npm_global
+version: 1.0.0
+desc: 查看 npm 全局安装的包
+url: plugins/npm_global.yml
+
+tools:
+  - id: list
+    desc: 返回 npm 全局包列表
+    script: |
+      out = cmd("npm ls -g --depth=0 2>/dev/null | head -40 | tail -30 || echo npm不可用")
+      if contains(out, "不可用")
+        ret("" + trim(out))
+      else
+        ret("npm 全局包：\n" + out)
+      end

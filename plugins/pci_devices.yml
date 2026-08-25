@@ -1,0 +1,16 @@
+# vPanel 插件：PCI 设备
+name: pci_devices
+version: 1.0.0
+desc: 查看 PCI 设备（网卡/显卡/控制器）
+url: plugins/pci_devices.yml
+
+tools:
+  - id: list
+    desc: 返回 PCI 设备概览
+    script: |
+      out = cmd("lspci 2>/dev/null | head -30 || echo 需安装pciutils")
+      if contains(out, "需安装")
+        ret("" + trim(out))
+      else
+        ret("PCI 设备：\n" + out)
+      end

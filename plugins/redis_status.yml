@@ -1,0 +1,12 @@
+# vPanel 插件：Redis 状态
+name: redis_status
+version: 1.0.0
+desc: 检查 Redis 服务运行状态与内存/连接数
+url: plugins/redis_status.yml
+
+tools:
+  - id: status
+    desc: 通过 redis-cli 返回 Redis 关键指标
+    script: |
+      out = cmd("redis-cli INFO server,memory,clients 2>/dev/null | grep -E 'redis_version|used_memory_human|connected_clients|os:' || echo Redis不可用")
+      ret("Redis 状态：\n" + out)

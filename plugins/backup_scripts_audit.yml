@@ -1,0 +1,16 @@
+# vPanel 插件：备份脚本审计
+name: backup_scripts_audit
+version: 1.0.0
+desc: 检测系统存在的备份脚本与备份产物目录
+url: plugins/backup_scripts_audit.yml
+
+tools:
+  - id: scan
+    desc: 查找常见的备份脚本与目录
+    script: |
+      out = cmd("ls /root/backup /backup /data/backup /var/backups 2>/dev/null; find /root /usr/local -maxdepth 3 -name '*backup*.sh' 2>/dev/null | head -10")
+      if trim(out) == ""
+        ret("未发现明显备份脚本/目录，建议配置备份")
+      else
+        ret("检测到的备份相关内容：\n" + out)
+      end

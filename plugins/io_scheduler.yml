@@ -1,0 +1,16 @@
+# vPanel 插件：I/O 调度器
+name: io_scheduler
+version: 1.0.0
+desc: 查看块设备的 I/O 调度器（noop/mq-deadline/none）
+url: plugins/io_scheduler.yml
+
+tools:
+  - id: get
+    desc: 返回各磁盘的 I/O 调度器
+    script: |
+      out = cmd("for d in /sys/block/sd[a-z] /sys/block/nvme* /sys/block/vd[a-z]; do [ -f $d/queue/scheduler ] && echo \"$(basename $d): $(cat $d/queue/scheduler | sed 's/\\[//;s/\\]//')\"; done")
+      if trim(out) == ""
+        ret("无法读取调度器信息")
+      else
+        ret("I/O 调度器：\n" + out)
+      end

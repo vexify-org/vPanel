@@ -1,0 +1,14 @@
+# vPanel 插件：线程数统计
+name: proc_threads
+version: 1.0.0
+desc: 统计系统总线程数与线程最多的进程
+url: plugins/proc_threads.yml
+
+tools:
+  - id: count
+    desc: 返回总线程数与线程最多的 10 个进程
+    script: |
+      total = cmd("ps -eLf 2>/dev/null | wc -l")
+      top = cmd("ps -eLf 2>/dev/null | awk 'NR>1{c[$2]=c[$2]+1} END{for(p in c) print c[p], p}' | sort -rn | head -10 | numfmt --to=si 2>/dev/null || echo")
+      tl = cmd("ps -eLf 2>/dev/null | awk 'NR>1{print $7, $2}' | sort | uniq -c | sort -rn | head -10")
+      ret("总线程数: " + trim(total) + "\n线程最多的进程(线程数 PID)：\n" + trim(tl))

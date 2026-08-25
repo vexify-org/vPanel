@@ -1,0 +1,16 @@
+# vPanel 插件：MySQL 连接
+name: mysql_conn
+version: 1.0.0
+desc: 检查 MySQL 连接数与关键状态
+url: plugins/mysql_conn.yml
+
+tools:
+  - id: status
+    desc: 通过 mysqladmin 返回连接/Uptime/版本
+    script: |
+      out = cmd("mysqladmin status 2>/dev/null || mysql -e 'select version(),@@max_connections' 2>/dev/null || echo MySQL不可用")
+      if contains(out, "不可用")
+        ret("" + trim(out))
+      else
+        ret("MySQL 状态：\n" + out)
+      end

@@ -1,0 +1,16 @@
+# vPanel 插件：网卡丢包错误
+name: net_errors
+version: 1.0.0
+desc: 查看网卡收发错误、丢包与冲突计数器
+url: plugins/net_errors.yml
+
+tools:
+  - id: errors
+    desc: 返回各网卡错误/丢包计数
+    script: |
+      out = cmd("awk 'NR>2{split($1,a,\":\"); if($4!=0 || $5!=0 || $12!=0 || $13!=0) print a[1], \"rx_err=\"$4\" tx_err=\"$12\" rx_drop=\"$5\" tx_drop=\"$13}' /proc/net/dev")
+      if len(out) > 1
+        ret("网卡错误/丢包计数：\n" + out)
+      else
+        ret("网卡错误/丢包计数：\n(无异常)")
+      end

@@ -1,0 +1,16 @@
+# vPanel 插件：snap 包
+name: snap_packages
+version: 1.0.0
+desc: 查看 snap 安装的软件包及其刷新状态
+url: plugins/snap_packages.yml
+
+tools:
+  - id: list
+    desc: 返回已安装的 snap 包列表
+    script: |
+      out = cmd("snap list 2>/dev/null | head -30")
+      if trim(out) == ""
+        ret("未安装 snap 或 snap 不可用")
+      else
+        ret("snap 包：\n" + out)
+      end

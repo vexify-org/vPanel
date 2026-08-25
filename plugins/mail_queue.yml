@@ -1,0 +1,17 @@
+# vPanel 插件：邮件队列
+name: mail_queue
+version: 1.0.0
+desc: 查看 postfix/sendmail 邮件队列积压
+url: plugins/mail_queue.yml
+
+tools:
+  - id: queue
+    desc: 返回邮件队列中的邮件数（排查邮件卡住）
+    script: |
+      s = cmd("postqueue -p 2>/dev/null | grep -cE '^[0-9]{5}' || mailq 2>/dev/null | grep -c 'Request queue'")
+      if atoi(trim(s)) == 0
+        ret("邮件队列为空（或未安装 MTA）")
+      else
+        q = cmd("postqueue -p 2>/dev/null | tail -15")
+        ret("邮件队列: " + trim(s) + " 封待发：\n" + q)
+      end

@@ -1,0 +1,17 @@
+# vPanel 插件：SUID/SGID 文件
+name: suid_sgid_files
+version: 1.0.0
+desc: 扫描具有 setuid/setgid 特殊权限的可执行文件
+url: plugins/suid_sgid_files.yml
+
+tools:
+  - id: scan
+    desc: 返回系统中 setuid/setgid 文件
+    script: |
+      out = cmd("find / -xdev -type f \\( -perm -4000 -o -perm -2000 \\) 2>/dev/null | head -30")
+      c = cmd("find / -xdev -type f \\( -perm -4000 -o -perm -2000 \\) 2>/dev/null | wc -l")
+      if trim(c) == "0"
+        ret("未发现 SUID/SGID 文件")
+      else
+        ret("SUID/SGID 文件数: " + trim(c) + "：\n" + out)
+      end

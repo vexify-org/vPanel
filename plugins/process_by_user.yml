@@ -1,0 +1,12 @@
+# vPanel 插件：按用户进程数
+name: process_by_user
+version: 1.0.0
+desc: 统计各系统用户的进程数量与内存占用
+url: plugins/process_by_user.yml
+
+tools:
+  - id: count
+    desc: 返回各用户进程数与总内存
+    script: |
+      out = cmd("ps -eo user,rss --no-headers 2>/dev/null | awk '{a[$1]++; m[$1]+=$2} END{for(u in a) printf \"%-12s 进程:%-5d 内存:%sMB\n\", u, a[u], int(m[u]/1024)}' | sort -k2 -rn -k2 | head -20")
+      ret("各用户进程统计：\n" + out)

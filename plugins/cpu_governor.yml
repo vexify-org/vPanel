@@ -1,0 +1,31 @@
+# vPanel 插件：CPU 调频策略
+name: cpu_governor
+version: 1.0.0
+desc: 查看/设置 CPU 调频策略（performance/ondemand/schedutil）
+url: plugins/cpu_governor.yml
+
+tools:
+  - id: get
+    desc: 显示所有 CPU 核心的当前调频策略
+    script: |
+      g = cmd("for c in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor; do cat $c 2>/dev/null; done | sort | uniq -c")
+      if trim(g) == ""
+        ret("系统不支持 cpufreq 调频（虚拟化或较新内核）")
+      else
+        ret("当前调频策略分布：\n" + g)
+      end
+  - id: set
+    desc: 设置所有核心的调频策略（需 root）
+    params:
+      - id: governor
+        name: 策略(performance/ondemand/conservative/schedutil)
+        type: string
+        required: true
+    script: |
+      g = arg("governor")
+      if g == ""
+        ret("请提供 governor 参数")
+      else
+        ok = cmd("echo '" + g + "' | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null && echo OK || echo FAIL")
+        ret("设置结果: " + trim(ok))
+      end

@@ -1,0 +1,12 @@
+# vPanel 插件：磁盘分区
+name: disk_partitions
+version: 1.0.0
+desc: 查看真实分区的占用情况（过滤临时文件系统）
+url: plugins/disk_partitions.yml
+
+tools:
+  - id: df
+    desc: 返回真实分区容量与挂载点
+    script: |
+      out = cmd("df -hT 2>/dev/null | grep -Ev 'tmpfs|overlay|udev|shm'")
+      ret("" + out)

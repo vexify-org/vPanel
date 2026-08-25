@@ -1,0 +1,16 @@
+# vPanel 插件：Docker 统计
+name: docker_stats
+version: 1.0.0
+desc: 查看 Docker 容器实时资源使用统计
+url: plugins/docker_stats.yml
+
+tools:
+  - id: stats
+    desc: 返回运行中容器的 CPU/内存占用（快照一次）
+    script: |
+      out = cmd("docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' 2>/dev/null || echo Docker不可用")
+      if contains(out, "不可用")
+        ret("" + trim(out))
+      else
+        ret("Docker 容器统计：\n" + out)
+      end

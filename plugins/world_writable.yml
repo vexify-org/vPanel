@@ -1,0 +1,17 @@
+# vPanel 插件：全系统可写文件
+name: world_writable
+version: 1.0.0
+desc: 扫描全局可写(777)的文件/目录（安全隐患排查）
+url: plugins/world_writable.yml
+
+tools:
+  - id: scan
+    desc: 返回系统常见的全局可写文件/目录
+    script: |
+      out = cmd("find / -xdev -type f -perm -0002 2>/dev/null | head -20")
+      c = cmd("find / -xdev -perm -0002 2>/dev/null | wc -l")
+      if trim(c) == "0"
+        ret("未发现全局可写文件")
+      else
+        ret("全局可写文件数: " + trim(c) + "，示例：\n" + out)
+      end

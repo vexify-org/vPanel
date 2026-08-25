@@ -1,0 +1,13 @@
+# vPanel 插件：内核信息
+name: kernel_info
+version: 1.0.0
+desc: 查看内核版本与编译信息
+url: plugins/kernel_info.yml
+
+tools:
+  - id: info
+    desc: 返回内核版本与 /proc/version 概要
+    script: |
+      v = cmd("uname -r")
+      full = cmd("cat /proc/version")
+      ret("内核版本: " + trim(v) + "\n" + trim(full))

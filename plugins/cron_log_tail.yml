@@ -1,0 +1,16 @@
+# vPanel 插件：cron 执行日志
+name: cron_log_tail
+version: 1.0.0
+desc: 查看 cron 最近的执行记录
+url: plugins/cron_log_tail.yml
+
+tools:
+  - id: tail
+    desc: 返回 /var/log/cron 或 syslog 中 cron 记录
+    script: |
+      out = cmd("grep 'CRON' /var/log/syslog /var/log/cron 2>/dev/null | tail -15")
+      if trim(out) == ""
+        ret("无 cron 执行日志")
+      else
+        ret("cron 最近执行：\n" + out)
+      end

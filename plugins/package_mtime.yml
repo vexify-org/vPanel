@@ -1,0 +1,17 @@
+# vPanel 插件：最近安装的软件包
+name: package_mtime
+version: 1.0.0
+desc: 查看最近安装/变更的软件包
+url: plugins/package_mtime.yml
+
+tools:
+  - id: recent
+    desc: 返回近期安装的软件包列表
+    script: |
+      out = cmd("ls -lt /var/lib/dpkg/info/*.list 2>/dev/null | head -15 | awk '{print $6, $7, $8, $9}' | xargs -I{} basename {}")
+      if trim(out) == ""
+        ret("非 Debian 系或无法读取")
+      else
+        s = cmd("ls -lt /var/lib/dpkg/info/*.list 2>/dev/null | head -15 | awk '{print $9}' | xargs -n1 basename | sed 's/.list$//'")
+        ret("最近变更的软件包：\n" + s)
+      end

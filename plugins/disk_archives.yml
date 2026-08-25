@@ -1,0 +1,16 @@
+# vPanel 插件：磁盘快照/备份产物
+name: disk_archives
+version: 1.0.0
+desc: 查看磁盘上遗留的压缩归档(备份产物)占用
+url: plugins/disk_archives.yml
+
+tools:
+  - id: arches
+    desc: 返回根目录下最大的 .tar/.gz/.zip 归档
+    script: |
+      out = cmd("find / -xdev \\( -name '*.tar.gz' -o -name '*.tar' -o -name '*.zip' -o -name '*.sql.gz' \\) -type f -printf '%s %p\\n' 2>/dev/null | sort -rn | head -15")
+      if trim(out) == ""
+        ret("未发现遗留归档文件")
+      else
+        ret("归档/备份产物 TOP：\n" + out)
+      end

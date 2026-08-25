@@ -1,0 +1,17 @@
+# vPanel 插件：开机自启服务
+name: boot_services
+version: 1.0.0
+desc: 查看开机自启(enabled)的系统服务
+url: plugins/boot_services.yml
+
+tools:
+  - id: enabled
+    desc: 返回已启用自启的服务列表
+    script: |
+      out = cmd("systemctl list-unit-files --type=service --state=enabled --no-legend --plain 2>/dev/null | awk '{print $1}' | head -40")
+      c = cmd("systemctl list-unit-files --type=service --state=enabled 2>/dev/null | grep -c enabled")
+      if trim(c) == "0"
+        ret("无自启服务或非systemd")
+      else
+        ret("开机自启服务(共 " + trim(c) + ")：\n" + out)
+      end

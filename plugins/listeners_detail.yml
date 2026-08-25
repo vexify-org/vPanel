@@ -1,0 +1,12 @@
+# vPanel 插件：进程占用端口
+name: listeners_detail
+version: 1.0.0
+desc: 列出监听端口与对应的进程 PID、名称
+url: plugins/listeners_detail.yml
+
+tools:
+  - id: ss
+    desc: 返回全部监听 TCP/UDP 端口及进程
+    script: |
+      out = cmd("ss -tulnp 2>/dev/null | awk 'NR>1{split($5,a,\":\"); printf \"%s %s %s\n\", a[length(a)], $1, $(NF)}' | sed 's/users://' | sort -n -u | head -80")
+      ret("端口 协议 进程\n" + out)

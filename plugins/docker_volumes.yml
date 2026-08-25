@@ -1,0 +1,16 @@
+# vPanel 插件：Docker 卷
+name: docker_volumes
+version: 1.0.0
+desc: 查看 Docker 数据卷与占用
+url: plugins/docker_volumes.yml
+
+tools:
+  - id: vols
+    desc: 返回 Docker 卷列表与挂载点
+    script: |
+      out = cmd("docker volume ls 2>/dev/null || echo Docker不可用")
+      if contains(out, "不可用")
+        ret("" + trim(out))
+      else
+        ret("Docker 卷：\n" + out)
+      end

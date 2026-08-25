@@ -1,0 +1,16 @@
+# vPanel 插件：SSH 主机密钥
+name: ssh_host_keys
+version: 1.0.0
+desc: 查看服务器 SSH 主机密钥指纹（用于核对 known_hosts）
+url: plugins/ssh_host_keys.yml
+
+tools:
+  - id: fingerprint
+    desc: 返回各类型主机密钥的 SHA256 指纹
+    script: |
+      out = cmd("for k in /etc/ssh/ssh_host_*_key.pub; do [ -f $k ] && ssh-keygen -lf $k 2>/dev/null; done")
+      if trim(out) == ""
+        ret("未找到主机密钥")
+      else
+        ret("主机密钥指纹：\n" + out)
+      end

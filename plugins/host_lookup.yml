@@ -1,0 +1,22 @@
+# vPanel 插件：主机名解析
+name: host_lookup
+version: 1.0.0
+desc: 解析域名到 IP（getent/多 DNS 视角）
+url: plugins/host_lookup.yml
+
+tools:
+  - id: resolve
+    desc: 解析域名返回 IPv4/IPv6 地址
+    params:
+      - id: host
+        name: 域名
+        type: string
+        required: true
+    script: |
+      h = arg("host")
+      ip = cmd("getent hosts '" + h + "' 2>/dev/null | awk '{print $1}' | sort -u")
+      if trim(ip) == ""
+        ret("无法解析 " + h)
+      else
+        ret("" + h + " 解析到：\n" + ip)
+      end

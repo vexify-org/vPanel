@@ -1,0 +1,13 @@
+# vPanel 插件：架构信息
+name: os_arch
+version: 1.0.0
+desc: 查看 CPU 架构位数
+url: plugins/os_arch.yml
+
+tools:
+  - id: info
+    desc: 返回架构与位数
+    script: |
+      u = cmd("uname -m")
+      bits = cmd("uname -m | grep -q 64 && echo 64位 || echo 非64位")
+      ret("架构: " + trim(u) + "（" + trim(bits) + "）")

@@ -1,0 +1,12 @@
+# vPanel 插件：meminfo 详情
+name: meminfo_detail
+version: 1.0.0
+desc: 查看 /proc/meminfo 关键字段（脏页/Dirty 等细粒度信息）
+url: plugins/meminfo_detail.yml
+
+tools:
+  - id: detail
+    desc: 返回 meminfo 中 Buffers/Cached/Dirty/AnonPages 等
+    script: |
+      out = cmd("grep -E '^(MemTotal|MemFree|Buffers|Cached|SwapCached|Active|Inactive|Dirty|Writeback|AnonPages|Shmem|PageTables|Committed_AS):' /proc/meminfo")
+      ret("meminfo 明细（KB）：\n" + out)

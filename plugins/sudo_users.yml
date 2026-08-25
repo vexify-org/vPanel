@@ -1,0 +1,16 @@
+# vPanel 插件：sudo 用户
+name: sudo_users
+version: 1.0.0
+desc: 查看拥有 sudo/root 权限的账户
+url: plugins/sudo_users.yml
+
+tools:
+  - id: list
+    desc: 返回 sudo 组与 wheel/sudoers 中的账户
+    script: |
+      out = cmd("cat /etc/group | grep -E '^(sudo|wheel):.*:' | cut -d: -f4; grep -E '^[^#].*ALL=\(ALL' /etc/sudoers 2>/dev/null | grep -v Defaults | head -20")
+      if trim(out) == ""
+        ret("未检测到显式 sudo 配置（可能使用其他授权方式）")
+      else
+        ret("拥有 sudo 权限的账户：\n" + out)
+      end

@@ -1,0 +1,16 @@
+# vPanel 插件：系统日志错误
+name: syslog_errors
+version: 1.0.0
+desc: 排查 syslog/系统日志中的常见错误
+url: plugins/syslog_errors.yml
+
+tools:
+  - id: check
+    desc: 返回系统日志中 ERROR/CRIT 条目
+    script: |
+      out = cmd("grep -iE 'error|critical|failed' /var/log/syslog 2>/dev/null | tail -15")
+      if trim(out) == ""
+        ret("系统日志无显著错误")
+      else
+        ret("系统日志错误：\n" + out)
+      end

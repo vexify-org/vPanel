@@ -1,0 +1,12 @@
+# vPanel 插件：systemd 定时器
+name: systemd_timers
+version: 1.0.0
+desc: 查看 systemd 定时器（tasks 之外的系统级定时任务）
+url: plugins/systemd_timers.yml
+
+tools:
+  - id: list
+    desc: 返回全部 systemd timers 及下次触发时间
+    script: |
+      out = cmd("systemctl list-timers --no-legend --all 2>/dev/null | head -20 || echo 无systemd")
+      ret("systemd 定时器：\n" + out)

@@ -1,0 +1,16 @@
+# vPanel 插件：at 计划任务
+name: at_jobs
+version: 1.0.0
+desc: 查看一次性 at 计划任务队列
+url: plugins/at_jobs.yml
+
+tools:
+  - id: list
+    desc: 返回 at 队列表中的任务
+    script: |
+      out = cmd("atq 2>/dev/null | head -30 || echo at服务未安装/未运行")
+      if contains(out, "未")
+        ret("" + trim(out))
+      else
+        ret("at 任务队列：\n" + out)
+      end

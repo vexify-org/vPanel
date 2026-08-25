@@ -1,0 +1,12 @@
+# vPanel 插件：SELinux 状态
+name: selinux_status
+version: 1.0.0
+desc: 查看 SELinux 是否启用及当前模式
+url: plugins/selinux_status.yml
+
+tools:
+  - id: status
+    desc: 返回 SELinux 模式
+    script: |
+      m = cmd("getenforce 2>/dev/null || sestatus 2>/dev/null | head -1 || echo 未安装SELinux")
+      ret("SELinux: " + trim(m))
