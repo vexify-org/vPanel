@@ -8,6 +8,12 @@ description = "vPanel: a tiny, low-memory HTTP dashboard panel with YAML config,
 name = "vpanel"
 path = "src/main.rs"
 
+[features]
+# 默认精简构建：不内链 rustls/ring/rcgen，把常驻内存压到最低。
+# 需要内置 HTTPS 时用 `cargo build --release --features tls` 编译。
+default = []
+tls = ["dep:rustls", "dep:rustls-pemfile", "dep:rcgen"]
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
@@ -20,9 +26,10 @@ base64 = "0.22"
 rand = "0.8"
 sha2 = "0.10"
 # 内置 HTTPS：TLS 终结（自签 / 已有证书），对齐 iotapanel 的 https-front。
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
-rustls-pemfile = "2"
-rcgen = { version = "0.13", default-features = false, features = ["ring"] }
+# 可选特性（默认不含，省 ring 汇编代码段，显著降低常驻内存）。
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"], optional = true }
+rustls-pemfile = { version = "2", optional = true }
+rcgen = { version = "0.13", default-features = false, features = ["ring"], optional = true }
 
 [profile.release]
 # 尽力把二进制和常驻内存压到最小

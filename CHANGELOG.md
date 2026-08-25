@@ -45,9 +45,20 @@
   - **用户/杂项**：`users_list` / `whoami` / `random_password` / `sha256` / `base64_encode` / `base64_decode` / `uuid` / `panel_about`
   - 新增依赖 `rand` / `sha2`（minimal features，仅用作随机/哈希），随添加随用小体积实现
 
+### 常驻内存压到 2MB 档（对标 ≤10MB → 实际 ≈2.3MB）
+- **TLS 改为可选 `tls` 特性**（`Cargo.toml` + `src/tls.rs` 双分支）
+  - 默认 build 不再内链 `rustls`/`ring`/`rcgen`——ring 的纯汇编(AES/SHA/P256)代码段体积很大
+  - 二进制从 2.42MB → **1.53MB**；常驻内存(冷启动)从 2.7MB → **≈2.1MB**
+  - HTTPS 一点不丢：`cargo build --release --features tls` 恢复完整内置 TLS（自签/已有证书）
+  - 无 `tls` 特性时 `Server` 为纯 TCP 透传空壳、`enabled()` 恒 false，对外 API 接口不变
+- **瘦线程**：面板示例 `workers: 4→1`、默认 `d_workers() 2→1`、iota 空闲回收线程在 `idle_secs==0` 时不再常驻
+- 最终实测（release，线程 6）：
+  - 冷启动 RSS **≈2.1–2.3MB**；打过 MCP/API 后 RSS **≈2.33MB**、PSS **≈2.16MB**
+
 ### 验证
 - 单测：36/36 通过（含建站 PHP 版本 socket 映射断言）
-- 实测内存：debug 构建常驻 RSS ≈ 6.0MB（新增 67 个 ops 工具后仍在 ≤10MB 预算内）
+- 构建：`cargo build --release`（精简）与 `cargo build --release --features tls`（含 HTTPS）双通道均编译通过
+- 实测内存：release 精简构建常驻 RSS ≈ 2.1MB（冷启动）/ ≈2.3MB（打满 API+MCP）
 
 ---
 
