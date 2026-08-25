@@ -10,12 +10,15 @@
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "terminal")]
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 
 use crate::config::Shell;
 use crate::ws::{self, Frame, Ws};
 
 /// 驱动一个终端会话，直到 WebSocket 关闭或 Shell 退出。
+/// 未启用 `terminal` 特性时，本模块退化为「收到 WebSocket 即关闭」，不内链 portable-pty。
+#[cfg(feature = "terminal")]
 pub fn run(mut ws: Ws, shell: &Shell) {
     if !shell.enabled {
         let _ = ws::send_close(&mut *ws.writer);
@@ -116,4 +119,10 @@ pub fn run(mut ws: Ws, shell: &Shell) {
     }
 
     let _ = child.kill();
+}
+
+/// 未启用 `terminal` 特性时的占位实现：收到 WebSocket 升级即关闭连接。
+#[cfg(not(feature = "terminal"))]
+pub fn run(mut ws: Ws, _shell: &Shell) {
+    let _ = ws::send_close(&mut *ws.writer);
 }

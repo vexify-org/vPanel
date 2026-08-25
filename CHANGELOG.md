@@ -2,9 +2,28 @@
 
 > 面板：**vPanel** —— 纯 Rust 编写的极简低内存 HTTP 管理面板。
 > 记录约定：按 `语义化版本` 组织，`v1.3.0` 为当前主干版本；往下为规划中的目标版本（对标宝塔能力补全）。
-> 内存目标：常驻内存 ≤ 10MB。
+> 内存目标：常驻内存 ≤ 10MB（release 精简构建实际 ≈2MB）。
 
-## v1.4.0（已发布）
+## v1.4.1（当前）
+
+继续压缩常驻内存的补丁版。
+
+- **Web 终端改为可选 `terminal` 特性**（`Cargo.toml` + `src/term.rs`）
+  - 默认 build 不再内链 `portable-pty`（Web 终端的 PTY 依赖），二进制 1.53MB → **1.44MB**
+  - `--features terminal` 恢复浏览器内 Shell；关闭时 WebSocket 升级即断开，行为可预期
+  - 冷启动常驻 **≈2.1MB → ≈2.05MB**
+- **调优：周期性 `malloc_trim`**（`src/http.rs`）
+  - 每 200 个请求把 glibc 空闲堆 trim 回内核（仅 gnu/glibc，musl 自动跳过），抑制长连堆残留
+- 特性矩阵：`tls`（HTTPS）/ `terminal`（Web 终端）均可组合 `--features tls,terminal` 全功能编译
+- 实测（release，默认精简，线程 6）：冷启动 RSS **≈2.05MB**；打满 API+MCP 后 ≈2.41MB
+
+### 验证
+- 构建矩阵全部通过：默认精简 / `--features tls,terminal` 全功能
+- 单测：36/36 通过
+
+---
+
+## v1.4.0
 
 本轮为「宝塔功能全量补齐」，重点是给已有后端模块接入**可视化前端页面**，并新增若干后端能力。
 

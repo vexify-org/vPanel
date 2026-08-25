@@ -20,6 +20,27 @@ use crate::tls::Io;
 
 const MAX_REQ: usize = 8192;
 
+/// 周期性把 glibc 空闲堆还给内核（glibc 分配器会保留已释放 chunk，
+/// 表现在 RSS 私有脏页上；trim 把它们归还 OS 压低常驻内存）。
+/// 仅 gnu/glibc 有效；musl 与之互斥，跳过。
+#[cfg(all(unix, not(target_env = "musl")))]
+unsafe extern "C" {
+    fn malloc_trim(pad: usize) -> i32;
+}
+
+#[cfg(all(unix, not(target_env = "musl")))]
+fn release_memory() {
+    unsafe {
+        malloc_trim(0);
+    }
+}
+#[cfg(not(all(unix, not(target_env = "musl"))))]
+fn release_memory() {}
+
+/// 全进程已处理请求数（用于节流内存回收）。
+static GC_EVERY: u64 = 200;
+static GLOBAL_REQ: AtomicU64 = AtomicU64::new(0);
+
 /// 线程间共享的状态与统计。
 pub struct State {
     pub started: Instant,
@@ -132,6 +153,10 @@ fn worker(queue: Arc<Mutex<std::collections::VecDeque<TcpStream>>>, state: Arc<S
                 handle(&mut *conn, &state);
             }
             state.active.fetch_sub(1, Ordering::Relaxed);
+            // 节流：每 GC_EVERY 个请求 trim 一次空闲堆，把常驻私有大页让回内核。
+            if GLOBAL_REQ.fetch_add(1, Ordering::Relaxed) % GC_EVERY == GC_EVERY - 1 {
+                release_memory();
+            }
         } else {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }

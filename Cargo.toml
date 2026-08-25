@@ -1,6 +1,6 @@
 [package]
 name = "vpanel"
-version = "1.4.0"
+version = "1.4.1"
 edition = "2021"
 description = "vPanel: a tiny, low-memory HTTP dashboard panel with YAML config, built in pure Rust."
 
@@ -9,17 +9,21 @@ name = "vpanel"
 path = "src/main.rs"
 
 [features]
-# 默认精简构建：不内链 rustls/ring/rcgen，把常驻内存压到最低。
-# 需要内置 HTTPS 时用 `cargo build --release --features tls` 编译。
+# 默认精简构建：不内链 rustls/ring/rcgen（TLS）与 portable-pty（Web 终端），
+# 把常驻内存压到最低。需要时用特性开启：
+#   cargo build --release --features tls        # 内置 HTTPS
+#   cargo build --release --features terminal    # Web 终端（浏览器内 Shell）
+#   cargo build --release --features tls,terminal # 全功能
 default = []
 tls = ["dep:rustls", "dep:rustls-pemfile", "dep:rcgen"]
+terminal = ["dep:portable-pty"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 serde_json = "1"
-# Web 终端（PTY + WebSocket）
-portable-pty = "0.8"
+# Web 终端（PTY + WebSocket）——可选特性，默认不含（省便携 PTY 依赖体积）。
+portable-pty = { version = "0.8", optional = true }
 sha1 = "0.10"
 base64 = "0.22"
 # 运维工具箱（密码/随机、哈希、UUID）
