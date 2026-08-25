@@ -4,3 +4,6 @@
 /.vpanel-plugins-disabled.json
 # 监控历史（运行时采样的磁盘日志），不应提交
 /.vpanel-monitor.jsonl
+# 本地发布产物 / 日志，不应提交（binaries 走 GitHub Release 附件）
+/dist/
+/*.log
