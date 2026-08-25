@@ -4,7 +4,21 @@
 > 记录约定：按 `语义化版本` 组织，`v1.3.0` 为当前主干版本；往下为规划中的目标版本（对标宝塔能力补全）。
 > 内存目标：常驻内存 ≤ 10MB（release 精简构建实际 ≈2MB）。
 
-## v1.4.3（当前）
+## v1.4.4（当前）
+
+修好 Web 终端：默认构建直接可用，前/后端都做了加固。
+
+- **默认开启 `terminal` 特性**（`default = ["terminal"]`），`cargo build --release` 即可用浏览器内 Shell；
+  portable-pty 按连接分配，空闲常驻内存实测仍 ~**1.98MB**，未牺牲原有的低内存设计。
+- **后端实测可用**：/ws 真实拉起本地 PTY/SHell，输入 `echo hello-vpanel` 正确回显输出与提示符。
+- **前端修复**：
+  - 终点：PTY 输出是二进制帧，旧代码用 `term.write(ev.data)` 直接写 Blob 导致 xterm 无法渲染（输出永远不显示）—— 现统一把 Blob/ArrayBuffer 转 `Uint8Array` 再写；
+  - 连接建立前输入先入队、opened 后补发，不再因 WebSocket 未开就 send 报错；
+  - 打开后再发尺寸、resize 防抖（100ms），避免连接态竞态；
+  - 补充 `onerror` 状态，断开/失败清晰提示；
+  - 若 xterm.js 无法从 CDN 加载（离线），给出明确提示而非空白页。
+
+## v1.4.3
 
 再压缩常驻内存到 ≈2MB + 补充派发上一批遗漏的工具。
 

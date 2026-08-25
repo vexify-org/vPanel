@@ -817,18 +817,50 @@ body{margin:0;padding:0;background:__BG__;font-family:system-ui,sans-serif;heigh
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
 <script>
 (function(){
-  var term=new Terminal({cursorBlink:true,fontSize:14});
+  var st=document.getElementById('st');
+  function setStatus(s){if(st)st.textContent=s}
+  if(typeof Terminal==='undefined'||typeof FitAddon==='undefined'){
+    setStatus('终端组件加载失败：需要联网拉取 xterm.js 依赖');return;
+  }
+  var term=new Terminal({cursorBlink:true,fontSize:14,scrollback:2000,bellStyle:'none'});
   var fit=new FitAddon.FitAddon();term.loadAddon(fit);term.open(document.getElementById('term'));fit.fit();
   var ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
-  var st=document.getElementById('st');
-  ws.onopen=function(){st.textContent='已连接 · '+term.cols+'x'+term.rows;term.focus()};
-  ws.onclose=function(){st.textContent='已断开';term.dispose()};
-  ws.onmessage=function(ev){term.write(ev.data)};
+  var open=false, queue=[];
   var enc=new TextEncoder();
-  term.onData(function(d){ws.send(enc.encode(d))});
-  function sendSize(){ws.send('st\t'+term.cols+'\t'+term.rows)}
-  term.onResize(sendSize);sendSize();
-  window.addEventListener('resize',function(){fit.fit();sendSize()});
+  term.onData(function(d){
+    if(open){try{ws.send(enc.encode(d))}catch(e){}}
+    else{queue.push(d)}
+  });
+  function sendSize(){
+    if(open){try{ws.send('st\t'+term.cols+'\t'+term.rows)}catch(e){}}
+  }
+  ws.onopen=function(){
+    open=true;setStatus('已连接 · '+term.cols+'x'+term.rows);term.focus();
+    try{ws.send('st\t'+term.cols+'\t'+term.rows)}catch(e){}
+    for(var i=0;i<queue.length;i++){try{ws.send(enc.encode(queue[i]))}catch(e){}}
+    queue=[];
+    setTimeout(function(){fit.fit()},50);
+  };
+  ws.onerror=function(){setStatus('连接失败');try{ws.close()}catch(e){}};
+  ws.onclose=function(){setStatus('已断开');open=false;try{term.dispose()}catch(e){}};
+  // PTY 输出是二进制帧：Blob/ArrayBuffer 都要转成 Uint8Array 才交给 xterm。
+  ws.onmessage=function(ev){
+    var d=ev.data;
+    function write(u){try{term.write(u)}catch(e){}}
+    if(d instanceof Blob){
+      var fr=new FileReader();
+      fr.onload=function(){write(new Uint8Array(fr.result))};
+      fr.readAsArrayBuffer(d);
+    } else if(d instanceof ArrayBuffer){
+      write(new Uint8Array(d));
+    } else {
+      write(d);
+    }
+  };
+  var rt=null;
+  term.onResize(function(){clearTimeout(rt);rt=setTimeout(sendSize,100)});
+  var r2=null;
+  window.addEventListener('resize',function(){clearTimeout(r2);r2=setTimeout(function(){fit.fit();sendSize()},150)});
 })();
 </script>
 </body>
