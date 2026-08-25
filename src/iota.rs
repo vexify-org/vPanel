@@ -106,6 +106,8 @@ pub struct Manager {
     keepalives: Mutex<HashMap<String, bool>>,
     /// 本 Manager 的弱引用（load 后由 Arc 填充），供子进程等待线程回收自身条目。
     self_arc: Mutex<std::sync::Weak<Manager>>,
+    /// 空闲回收线程是否已启动（惰性启动，保证首个插件装上时也会拉起）。
+    reaper_on: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -165,13 +167,27 @@ impl Manager {
             runtimes: Mutex::new(HashMap::new()),
             keepalives: Mutex::new(HashMap::new()),
             self_arc: Mutex::new(std::sync::Weak::new()),
+            reaper_on: std::sync::atomic::AtomicBool::new(false),
         });
         *m.self_arc.lock().unwrap() = Arc::downgrade(&m);
         m.load_keepalives();
         m.adopt_running();
-        m.spawn_idle_reaper();
+        // 仅当确实装了插件时才拉起空闲回收线程；空目录不空转一线程。
+        if m.has_any_plugin() {
+            m.spawn_idle_reaper();
+        }
         m.revive_keepalive();
         m
+    }
+
+    /// 插件目录里是否存在任意 manifest（决定是否需要常驻回收线程）。
+    fn has_any_plugin(&self) -> bool {
+        let dir = std::path::Path::new(&self.cfg.home).join("plugins");
+        match std::fs::read_dir(&dir) {
+            Ok(rd) => rd.flatten()
+                .any(|e| self.manifest_path(&e.file_name().to_string_lossy()).is_file()),
+            Err(_) => false,
+        }
     }
 
     /// 扫描已安装插件，把 keepalive 但未运行的冷启动。
@@ -189,8 +205,12 @@ impl Manager {
     }
 
     fn spawn_idle_reaper(self: &Arc<Self>) {
-        // 未启用空闲回收（idle_secs==0）时无需常驻回收线程，省一线程栈内存。
+        // 未启用空闲回收（idle_secs==0）无需常驻回收线程。
         if self.cfg.idle_secs == 0 {
+            return;
+        }
+        // 已有一个回收线程时不再重复起（惰性场景：首个插件装上后由 start() 拉起）。
+        if self.reaper_on.swap(true, std::sync::atomic::Ordering::SeqCst) {
             return;
         }
         let this = self.clone();
@@ -387,6 +407,10 @@ impl Manager {
         // 等待线程：回收子进程 + 进程退出时清理运行条目。
         if let Some(arc) = self.self_arc.lock().unwrap().upgrade() {
             arc.spawn_waiter(name.to_string());
+        }
+        // 首个插件装上后要能空闲回收，确保回收线程在跑。
+        if let Some(arc) = self.self_arc.lock().unwrap().upgrade() {
+            arc.spawn_idle_reaper();
         }
 
         eprintln!("panel: iota 插件已启动 {name} ({bind}:{port} pid {pid})");
@@ -1057,6 +1081,7 @@ mod tests {
             runtimes: Mutex::new(HashMap::new()),
             keepalives: Mutex::new(HashMap::new()),
             self_arc: Mutex::new(std::sync::Weak::new()),
+            reaper_on: std::sync::atomic::AtomicBool::new(false),
         };
         assert!(c.cfg.port_lo > 0);
         assert!(c.cfg.port_hi >= c.cfg.port_lo);

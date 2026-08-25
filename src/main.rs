@@ -36,6 +36,9 @@ mod ws;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
+    // glibc 默认按 CPU 数开多个堆 arena 并预留着大量虚拟地址；把 arena 压到 1 个，
+    // 显著降低多线程下堆分配器保留的常驻/虚拟页，仅为压常驻内存服务。
+    std::env::set_var("MALLOC_ARENA_MAX", "1");
     // 用法:
     //   panel                 # 自动在当前目录查找配置文件（panel.yml / panel.yaml / config.yml / config.yaml）
     //   panel /path/a.yml     # 或显式指定配置路径

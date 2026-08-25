@@ -19,6 +19,8 @@ pub struct Monitor {
 }
 
 const RING: usize = 60;
+/// 后台线程栈上限：监控/调度线程只有浅调用，256KB 足够，可压低栈虚拟保留。
+const STACK_KB: usize = 256 * 1024;
 
 impl Monitor {
     fn new() -> Arc<Monitor> {
@@ -38,7 +40,10 @@ impl Monitor {
         let m = Monitor::new();
         let handle = Arc::downgrade(&m);
         let m2 = m.clone();
-        std::thread::spawn(move || {
+        std::thread::Builder::new()
+            .stack_size(STACK_KB)
+            .name("mon".into())
+            .spawn(move || {
             // 每 5 个采样写一条磁盘历史（约 5s），复用同一线程免去额外常驻线程。
             let mut tick: u32 = 0;
             loop {

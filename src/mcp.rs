@@ -47,7 +47,7 @@ fn fmt_jsonrpc(id: Option<i64>, payload: String, is_error: bool) -> String {
 }
 
 fn init_resp(id: Option<i64>) -> String {
-    let result = "{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"vpanel\",\"version\":\"1.4.0\"}}";
+    let result = format!("{{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{{\"tools\":{{}}}},\"serverInfo\":{{\"name\":\"vpanel\",\"version\":\"{}\"}}}}", env!("CARGO_PKG_VERSION"));
     fmt_jsonrpc(
         id,
         result.to_string(),

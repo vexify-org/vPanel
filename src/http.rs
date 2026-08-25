@@ -97,7 +97,10 @@ pub fn serve(cfg: Config) -> std::io::Result<()> {
     for _ in 0..workers {
         let queue = queue.clone();
         let state = state.clone();
-        std::thread::spawn(move || worker(queue, state));
+        std::thread::Builder::new()
+            .stack_size(384 * 1024)
+            .name("web".into())
+            .spawn(move || worker(queue, state));
     }
 
     eprintln!(
