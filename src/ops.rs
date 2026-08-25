@@ -719,7 +719,8 @@ pub fn panel_about() -> String {
     let (total, _) = crate::system::mem().unwrap_or((0, 0));
     let rss = rss_bytes();
     format!(
-        "{{\"ok\":true,\"name\":\"vpanel\",\"version\":\"1.4.0\",\"mem_total_mb\":{:.1},\"rss_mb\":{:.1}}}",
+        "{{\"ok\":true,\"name\":\"vpanel\",\"version\":\"{}\",\"mem_total_mb\":{:.1},\"rss_mb\":{:.1}}}",
+        env!("CARGO_PKG_VERSION"),
         total as f64 / 1048576.0,
         rss as f64 / 1048576.0
     )
@@ -730,6 +731,228 @@ fn rss_bytes() -> u64 {
         .and_then(|s| s.split_whitespace().nth(1).map(|x| x.parse::<u64>().unwrap_or(0)))
         .map(|pages| pages * 4096)
         .unwrap_or(0)
+}
+
+// ---------------------------------------------------------------------------
+// 九、安全 / 网络 / 系统实用（新增，全部纯函数、无状态）
+// ---------------------------------------------------------------------------
+
+/// 防火墙规则（iptables -S；无 iptables 时退回 nft list ruleset）。
+pub fn firewall_rules() -> String {
+    let out = cmd("iptables -S 2>/dev/null || nft list ruleset 2>/dev/null");
+    match out {
+        Some(o) => format!("{{\"ok\":true,\"rules\":\"{}\"}}", json::jesc(&o)),
+        None => "{\"ok\":false,\"msg\":\"无 iptables / nftables\"}".to_string(),
+    }
+}
+
+/// 网卡地址表（ip -o addr）-> JSON 数组。
+pub fn net_interfaces() -> String {
+    let out = cmd("ip -o addr show 2>/dev/null");
+    let mut first = true;
+    let mut s = String::from("{\"ok\":true,\"ifaces\":[");
+    if let Some(o) = out {
+        for line in o.lines() {
+            let f: Vec<&str> = line.split_whitespace().collect();
+            if f.len() < 4 {
+                continue;
+            }
+            let iface = f[1];
+            let addrs = f[3];
+            if !first {
+                s.push(',');
+            }
+            first = false;
+            s.push_str(&format!(
+                "{{\"iface\":\"{}\",\"inet\":\"{}\"}}",
+                json::jesc(iface),
+                json::jesc(addrs)
+            ));
+        }
+    }
+    s.push_str("]}");
+    s
+}
+
+/// 内核路由表（ip route）-> raw。画 JSON 仍然合法。
+pub fn route_table() -> String {
+    let out = cmd("ip route show 2>/dev/null || route -n 2>/dev/null");
+    match out {
+        Some(o) => format!("{{\"ok\":true,\"routes\":\"{}\"}}", json::jesc(&o)),
+        None => "{\"ok\":false,\"msg\":\"无法读取路由表\"}".to_string(),
+    }
+}
+
+/// 公网 IPv4（走外部回显服务，离线时失败）。
+pub fn public_ip() -> String {
+    let out = cmd("curl -s --max-time 4 https://api.ipify.org 2>/dev/null");
+    match out {
+        Some(ip) if !ip.trim().is_empty() => format!(
+            "{{\"ok\":true,\"ip\":\"{}\"}}",
+            json::jesc(ip.trim())
+        ),
+        _ => "{\"ok\":false,\"msg\":\"网络不可达或已离线\"}".to_string(),
+    }
+}
+
+/// 系统运行时长（秒）。
+pub fn uptime() -> String {
+    let secs = pfile("/proc/uptime")
+        .and_then(|s| s.split_whitespace().next().map(|x| x.parse::<u64>().unwrap_or(0)))
+        .unwrap_or(0);
+    format!(
+        "{{\"ok\":true,\"seconds\":{},\"str\":\"{:02}:{:02}:{:02}\"}}",
+        secs,
+        secs / 3600,
+        (secs % 3600) / 60,
+        secs % 60
+    )
+}
+
+/// 主机名。
+pub fn hostname() -> String {
+    let h = pfile("/proc/sys/kernel/hostname").unwrap_or_default();
+    format!("{{\"ok\":true,\"hostname\":\"{}\"}}", json::jesc(&h))
+}
+
+/// 当前在线用户（who）。
+pub fn who_online() -> String {
+    let out = cmd("who");
+    match out {
+        Some(o) if !o.is_empty() => format!("{{\"ok\":true,\"sessions\":\"{}\"}}", json::jesc(&o)),
+        _ => "{\"ok\":true,\"sessions\":\"(无)\"}".to_string(),
+    }
+}
+
+/// 最近登录记录（last -n 10）。
+pub fn last_logins() -> String {
+    let out = cmd("last -n 10 2>/dev/null");
+    match out {
+        Some(o) if !o.is_empty() => format!("{{\"ok\":true,\"logins\":\"{}\"}}", json::jesc(&o)),
+        _ => "{\"ok\":true,\"logins\":\"(无)\"}".to_string(),
+    }
+}
+
+/// 每核心 CPU 使用率（双次采样求差）。
+pub fn cpu_per_core() -> String {
+    let a = proc_per_core();
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    let b = proc_per_core();
+    let mut first = true;
+    let mut s = String::from("{\"ok\":true,\"cores\":[");
+    for (name, old) in a {
+        if let Some((total, idle)) = b.get(&name) {
+            if *total > old.0 {
+                let tt = (*total - old.0) as f64;
+                let ii = (*idle - old.1) as f64;
+                let pct = ((tt - ii) / tt * 100.0).max(0.0);
+                if !first {
+                    s.push(',');
+                }
+                first = false;
+                s.push_str(&format!(
+                    "{{\"cpu\":\"{}\",\"usage_pct\":{:.1}}}",
+                    json::jesc(&name),
+                    pct
+                ));
+            }
+        }
+    }
+    s.push_str("]}");
+    s
+}
+
+/// 读取 /proc/stat 第 cpuN 行 -> map[cpu]:(total, idle)。
+fn proc_per_core() -> std::collections::HashMap<String, (u64, u64)> {
+    let mut m = std::collections::HashMap::new();
+    if let Some(s) = pfile("/proc/stat") {
+        for line in s.lines() {
+            if !line.starts_with("cpu") {
+                continue;
+            }
+            let mut it = line.split_whitespace();
+            let name = it.next().unwrap_or("").to_string();
+            let vals: Vec<u64> = it.map(|x| x.parse().unwrap_or(0)).collect();
+            if vals.len() >= 4 {
+                let idle = vals[3];
+                let total: u64 = vals.iter().sum();
+                m.insert(name, (total, idle));
+            }
+        }
+    }
+    m
+}
+
+/// 僵尸/僵停进程计数。
+pub fn zombie_count() -> String {
+    let n = cmd("ps -eo stat 2>/dev/null")
+        .map(|o| o.lines().filter(|l| l.trim().starts_with('Z')).count())
+        .unwrap_or(0);
+    format!("{{\"ok\":true,\"zombies\":{}}}", n)
+}
+
+/// 查看文件末尾 N 行（tail 语义）。
+pub fn file_tail(path: &str, n: usize) -> String {
+    let n = if n == 0 { 50 } else { n.min(2000) };
+    let (o, e) = cmd_e(&format!("tail -n {} {} 2>&1", n, shq(path)));
+    if !o.is_empty() {
+        format!("{{\"ok\":true,\"path\":\"{}\",\"out\":\"{}\"}}", json::jesc(path), json::jesc(&o))
+    } else {
+        format!("{{\"ok\":false,\"path\":\"{}\",\"msg\":\"{}\"}}", json::jesc(path), json::jesc(&e))
+    }
+}
+
+/// 当前时间（epoch 秒 + UTC ISO）。
+pub fn time_now() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // UTC 文本时间。
+    let iso = iso_from_secs(secs);
+    format!("{{\"ok\":true,\"epoch\":{},\"iso_gmt\":\"{}\"}}", secs, iso)
+}
+
+/// 把 epoch 秒换算成 UTC 的 ISO8601（不含时区后缀）。
+fn iso_from_secs(secs: u64) -> String {
+    let days0 = secs as i64 / 86400;
+    let rem = secs % 86400;
+    let (h, m, s) = (rem / 3600, (rem % 3600) / 60, rem % 60);
+    // 格里历 day->date（1970-01-01 = day 0）。
+    let (y, mo, d) = civil_from_days(days0);
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}", y, mo, d, h, m, s)
+}
+
+fn civil_from_days(z: i64) -> (i64, i64, i64) {
+    let z = z + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    (if m <= 2 { y + 1 } else { y }, m, d)
+}
+
+/// 生成 [min,max] 区间内的随机 int。
+pub fn random_int(min: i64, max: i64) -> String {
+    use rand::Rng;
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+    let mut r = StdRng::from_entropy();
+    let v = if max > min { r.gen_range(min..=max) } else { min };
+    format!("{{\"ok\":true,\"value\":{}}}", v)
+}
+
+/// 读取一个环境变量。
+pub fn read_env(name: &str) -> String {
+    match std::env::var(name) {
+        Ok(v) => format!("{{\"ok\":true,\"name\":\"{}\",\"value\":\"{}\"}}", json::jesc(name), json::jesc(&v)),
+        Err(_) => format!("{{\"ok\":false,\"name\":\"{}\",\"msg\":\"未设置\"}}", json::jesc(name)),
+    }
 }
 
 // ---------------------------------------------------------------------------

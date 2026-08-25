@@ -59,7 +59,6 @@ pub struct State {
 /// 启动监听并派发工作线程。阻塞运行，直到进程退出。
 pub fn serve(cfg: Config) -> std::io::Result<()> {
     let monitor = crate::system::Monitor::start();
-    crate::monitor::start();
     let shop = crate::shop::Shop::new();
     let plugins = crate::plugins::Plugins::new();
     plugins.load(&cfg); // 从 plugins 目录加载插件 + 启动定时线程

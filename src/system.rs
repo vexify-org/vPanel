@@ -39,12 +39,18 @@ impl Monitor {
         let handle = Arc::downgrade(&m);
         let m2 = m.clone();
         std::thread::spawn(move || {
+            // 每 5 个采样写一条磁盘历史（约 5s），复用同一线程免去额外常驻线程。
+            let mut tick: u32 = 0;
             loop {
                 // 仅当主监控仍存活时继续采样。
                 if handle.strong_count() == 0 {
                     break;
                 }
                 let _ = m2.sample();
+                tick = tick.wrapping_add(1);
+                if tick % 5 == 0 {
+                    crate::monitor::write_history();
+                }
                 std::thread::sleep(Duration::from_secs(1));
             }
         });

@@ -12,13 +12,11 @@ fn hist_file() -> String {
     format!("{}/{}", crate::config::Config::panel_dir(), HIST_FILE)
 }
 
-/// 启动后台采样线程（每 5s 一笔）。
-pub fn start() {
-    std::thread::spawn(|| loop {
-        let (dn, up) = sample_net();
-        append(now_ts(), sample_cpu(), sample_mem(), dn, up, sample_disk_pct());
-        std::thread::sleep(Duration::from_secs(5));
-    });
+/// 写一条历史采样。由 system.rs 的实时采样线程每约 5s 调用一次，
+/// 不再自起常驻线程（省掉一个线程栈的常驻内存）。
+pub fn write_history() {
+    let (dn, up) = sample_net();
+    append(now_ts(), sample_cpu(), sample_mem(), dn, up, sample_disk_pct());
 }
 
 fn now_ts() -> u64 {

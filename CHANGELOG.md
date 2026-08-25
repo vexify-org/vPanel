@@ -4,7 +4,28 @@
 > 记录约定：按 `语义化版本` 组织，`v1.3.0` 为当前主干版本；往下为规划中的目标版本（对标宝塔能力补全）。
 > 内存目标：常驻内存 ≤ 10MB（release 精简构建实际 ≈2MB）。
 
-## v1.4.1（当前）
+## v1.4.2（当前）
+
+再压缩 + 新增一批纯函数运维工具。
+
+- **压缩：合并监控线程**（`src/monitor.rs` + `src/system.rs` + `src/http.rs`）
+  - 历史采样(5s)并入实时采样线程(1s)，每 5 个 tick 顺带写一条磁盘历史，**去掉一个常驻线程**（线程 6→5）
+  - 私有脏页 880kB → **648kB**；**冷启动 RSS ≈1.95MB（首破 2MB）**；打满 API+MCP 后 ≈2.1MB
+- **新增 14 个 MCP 工具**（`src/ops.rs`，全部纯函数、随求即释，不增常驻）——MCP 工具总计 133 → **147**
+  - 安全：`firewall_rules`（iptables/nftables 规则）
+  - 网络：`net_interfaces`（网卡/地址）、`route_table`（路由表）、`public_ip`（公网 IPv4）
+  - 系统：`uptime`（运行时长）、`hostname`（主机名）、`who_online`（在线用户）、`last_logins`（最近登录）、`cpu_per_core`（每核 CPU）、`zombie_count`（僵尸进程）
+  - 文件：`file_tail`（文件末尾 N 行）
+  - 杂项：`time_now`（epoch+UTC）、`random_int`（随机整数）、`read_env`（读环境变量）
+- `panel_about` 版本号改用 `env!("CARGO_PKG_VERSION")` 自动同步
+
+### 验证
+- 单测 36/36 通过；新工具冒烟返回正确
+- 实测（release，精简，线程 5）：冷启动 RSS **≈1.95MB**；打满 API+MCP ≈2.1MB
+
+---
+
+## v1.4.1
 
 继续压缩常驻内存的补丁版。
 

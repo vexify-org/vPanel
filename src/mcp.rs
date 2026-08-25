@@ -239,6 +239,21 @@ fn tools_list(id: Option<i64>, state: &State) -> String {
         ("base64_decode","Base64 解码，参数 enc","{\"enc\":{\"type\":\"string\"}}"),
         ("uuid","生成随机 UUID","{}"),
         ("panel_about","面板自述(版本/内存)","{}"),
+        // ===== ops 九、安全 / 网络 / 系统实用 =====
+        ("firewall_rules","防火墙规则(iptables/nftables)","{}"),
+        ("net_interfaces","网卡地址表(ip addr)","{}"),
+        ("route_table","内核路由表(ip route)","{}"),
+        ("public_ip","公网 IPv4(回显服务)","{}"),
+        ("uptime","系统运行时长","{}"),
+        ("hostname","主机名","{}"),
+        ("who_online","当前在线用户(who)","{}"),
+        ("last_logins","最近登录记录(last)","{}"),
+        ("cpu_per_core","每核心 CPU 使用率","{}"),
+        ("zombie_count","僵尸进程计数","{}"),
+        ("file_tail","查看文件末尾 N 行，参数 path/n","{\"path\":{\"type\":\"string\"},\"n\":{\"type\":\"number\"}}"),
+        ("time_now","当前时间(epoch+UTC)","{}"),
+        ("random_int","生成 [min,max] 随机整数，参数 min/max","{\"min\":{\"type\":\"number\"},\"max\":{\"type\":\"number\"}}"),
+        ("read_env","读取环境变量，参数 name","{\"name\":{\"type\":\"string\"}}"),
     ];
     let mut item = Vec::new();
     for (name, desc, schema) in tools {
@@ -321,6 +336,9 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
     let tpid: u32 = arg_str(&args, "pid").parse().unwrap_or(0);
     let dest = arg_str(&args, "dest");
     let len: u32 = arg_str(&args, "len").parse().unwrap_or(0);
+    let tlines: usize = arg_str(&args, "n").parse().unwrap_or(50);
+    let min: i64 = arg_str(&args, "min").parse().unwrap_or(0);
+    let max: i64 = arg_str(&args, "max").parse().unwrap_or(100);
     let text = arg_str(&args, "text");
     let enc = arg_str(&args, "enc");
     let server_name = arg_str(&args, "server_name");
@@ -615,6 +633,21 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
         "base64_decode" => (true, crate::ops::base64_decode(&enc)),
         "uuid" => (true, crate::ops::uuid()),
         "panel_about" => (true, crate::ops::panel_about()),
+        // ops 九、安全 / 网络 / 系统实用
+        "firewall_rules" => (true, crate::ops::firewall_rules()),
+        "net_interfaces" => (true, crate::ops::net_interfaces()),
+        "route_table" => (true, crate::ops::route_table()),
+        "public_ip" => (true, crate::ops::public_ip()),
+        "uptime" => (true, crate::ops::uptime()),
+        "hostname" => (true, crate::ops::hostname()),
+        "who_online" => (true, crate::ops::who_online()),
+        "last_logins" => (true, crate::ops::last_logins()),
+        "cpu_per_core" => (true, crate::ops::cpu_per_core()),
+        "zombie_count" => (true, crate::ops::zombie_count()),
+        "file_tail" => (true, crate::ops::file_tail(&fname, tlines)),
+        "time_now" => (true, crate::ops::time_now()),
+        "random_int" => (true, crate::ops::random_int(min, max)),
+        "read_env" => (true, crate::ops::read_env(&fname)),
         _ => plugin_or_unknown(state, name.as_str(), &args),
     };
     let result = format!(
