@@ -300,7 +300,7 @@ fn d_port() -> u16 {
     8080
 }
 fn d_workers() -> usize {
-    2
+    1
 }
 fn d_backlog() -> usize {
     1024

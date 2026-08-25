@@ -189,6 +189,10 @@ impl Manager {
     }
 
     fn spawn_idle_reaper(self: &Arc<Self>) {
+        // 未启用空闲回收（idle_secs==0）时无需常驻回收线程，省一线程栈内存。
+        if self.cfg.idle_secs == 0 {
+            return;
+        }
         let this = self.clone();
         std::thread::spawn(move || loop {
             std::thread::sleep(Duration::from_secs(2));
