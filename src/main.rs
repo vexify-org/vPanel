@@ -12,6 +12,7 @@ mod ctl;
 mod db;
 mod env;
 mod extra;
+mod generic;
 mod http;
 mod iota;
 mod json;
