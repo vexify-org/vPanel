@@ -1,0 +1,32 @@
+# vPanel 插件：开机与运行时长
+name: uptime_info
+version: 1.0.0
+desc: 查看系统开机时长、运行负载与平均负载（使用可读时长格式化）
+url: plugins/uptime_info.yml
+
+tools:
+  - id: uptime
+    desc: 返回开机时长（人性化格式）与 1/5/15 分钟平均负载
+    script: |
+      up = cmd("cut -d. -f1 /proc/uptime")
+      dur = fmt_dur(atoi(trim(up)))
+      load = cmd("cat /proc/loadavg | awk '{print $1, $2, $3}'")
+      boot = cmd("who -b 2>/dev/null | awk '{print $3, $4}'")
+      ret("已开机: " + dur + "\n平均负载(1/5/15m): " + trim(load) + "\n上次启动时间: " + trim(boot))
+
+  - id: load
+    desc: 返回平均负载相对于 CPU 核数的压力评估
+    script: |
+      cores = cmd("nproc")
+      l1 = cmd("cat /proc/loadavg | awk '{print $1}'")
+      ratio = round(100 * atoi(l1) / atoi(cores))
+      if ratio < 70
+        st = "负载较低，运行顺畅"
+      else
+        if ratio < 120
+          st = "负载偏高，注意观察"
+        else
+          st = "负载过载，建议排查高占用进程"
+        end
+      end
+      ret("CPU 核数: " + trim(cores) + " / 1 分钟负载: " + trim(l1) + " / 负载率: " + itoa(ratio) + "%\n" + st)

@@ -1,0 +1,63 @@
+# vPanel 插件：大文件扫描与目录占用汇总
+name: large_files
+version: 1.0.0
+desc: 扫描指定根目录下体积最大的文件与目录，并汇总总量（使用模糊/统计内置函数）
+url: plugins/large_files.yml
+
+tools:
+  - id: top
+    desc: 找出根目录下最大的 12 个文件，返回路径与大小
+    params:
+      - id: dir
+        name: 根目录 默认/
+        type: string
+        required: false
+    script: |
+      d = arg("dir")
+      if d == ""
+        d = "/"
+      end
+      out = cmd("find '" + d + "' -xdev -type f -size +10M -printf '%s\\t%p\\n' 2>/dev/null | sort -rn | head -12 | awk '{printf \"%s\\t%s\\n\", $1, $2}'")
+      if trim(out) == ""
+        ret("未找到大于 10M 的文件（根目录: " + d + "）")
+      else
+        ret("" + out)
+      end
+
+  - id: dirs
+    desc: 汇总根目录下各一级子目录的体积（粗略，耗时较长）
+    params:
+      - id: dir
+        name: 目标目录 默认/var/log
+        type: string
+        required: false
+    script: |
+      d = arg("dir")
+      if d == ""
+        d = "/var/log"
+      end
+      out = cmd("du -sh " + d + "/* 2>/dev/null | sort -rh | head -15")
+      if trim(out) == ""
+        ret("无法读取目录 " + d)
+      else
+        ret("" + out)
+      end
+
+  - id: total
+    desc: 统计目录下普通文件总数与总体积（演示 sum/avg 内置函数）
+    params:
+      - id: dir
+        name: 目标目录 默认/var/log
+        type: string
+        required: false
+    script: |
+      d = arg("dir")
+      if d == ""
+        d = "/var/log"
+      end
+      out = cmd("find '" + d + "' -type f -printf '%s\\n' 2>/dev/null | head -20000")
+      sizes = lines(out)
+      total = sum(sizes)
+      cnt = atoi(len(sizes))
+      avg = avg(sizes)
+      ret("目录 " + d + ": " + itoa(cnt) + " 个文件\n总体积: " + fmt_bytes(total) + " / 平均: " + fmt_bytes(avg))

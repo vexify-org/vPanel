@@ -1,0 +1,49 @@
+# vPanel 插件：systemd 服务健康
+name: systemd_status
+version: 1.0.0
+desc: 检查 systemd 运行状态：失败的服务单元、系统负载、崩溃单位
+url: plugins/systemd_status.yml
+
+tools:
+  - id: health
+    desc: 返回 systemd 总体健康度：失败/激活服务计数及失败列表
+    script: |
+      failed = cmd("systemctl --failed --no-legend --plain 2>/dev/null | wc -l")
+      act = cmd("systemctl list-units --type=service --state=running --no-legend --plain 2>/dev/null | wc -l")
+      n = atoi(trim(failed))
+      if n == 0
+        tip = "全部服务正常"
+      else
+        tip = "存在失败服务"
+      end
+      list = cmd("systemctl --failed --no-legend --plain 2>/dev/null | head -20")
+      ret("运行中服务: " + trim(act) + " / 失败单位: " + trim(failed) + "（" + tip + "）\n" + list)
+
+  - id: list
+    desc: 列出所有非正常（non-running）服务，按失败/退出分类
+    params:
+      - id: state
+        name: 状态过滤(failed/exited/dead/全部留空)
+        type: string
+        required: false
+    script: |
+      f = arg("state")
+      if f == ""
+        f = "not-running"
+      end
+      out = cmd("systemctl list-units --type=service --state=" + f + " --no-legend --plain 2>/dev/null | awk '{print $1, $4}' | head -50")
+      if trim(out) == ""
+        ret("没有处于 " + f + " 状态的服务")
+      else
+        ret("" + out)
+      end
+
+tasks:
+  - id: watch
+    every: 600
+    desc: 每 10 分钟检查一次是否有失败服务，有则记录
+    script: |
+      failed = cmd("systemctl --failed --no-legend --plain 2>/dev/null | wc -l")
+      if atoi(trim(failed)) > 0
+        log("检测到 " + trim(failed) + " 个 systemd 失败单位")
+      end

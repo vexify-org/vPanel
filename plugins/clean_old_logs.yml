@@ -1,0 +1,71 @@
+# vPanel 插件：清理过期日志
+name: clean_old_logs
+version: 1.0.0
+desc: 按目录与保留天数清理过期 *.log 文件并统计释放空间
+url: plugins/clean_old_logs.yml
+
+tools:
+  - id: dry
+    desc: 预估将清理的过期日志（仅统计）
+    params:
+      - id: dir
+        name: 日志目录 默认/var/log
+        type: string
+        required: false
+      - id: days
+        name: 保留天数 默认30
+        type: number
+        required: false
+    script: |
+      d = arg("dir")
+      if d == ""
+        d = "/var/log"
+      end
+      dy = itoa(atoi(arg("days")))
+      if dy == "0"
+        dy = "30"
+      end
+      out = cmd("find '" + d + "' -name '*.log*' -type f -mtime +" + dy + " -printf '%s %p\\n' 2>/dev/null")
+      lines = lines(out)
+      total = 0
+      cnt = 0
+      for ln in lines
+        w = words(ln)
+        total = total + atoi(at(w, 0))
+        cnt = cnt + 1
+      end
+      ret("目录 " + d + " 下超过 " + dy + " 天的日志: " + itoa(cnt) + " 个，约 " + fmt_bytes(total) + "（执行 do 可删除）")
+
+  - id: do
+    desc: 删除过期日志并报告释放大小（需相应权限）
+    params:
+      - id: dir
+        name: 日志目录 默认/var/log
+        type: string
+        required: false
+      - id: days
+        name: 保留天数 默认30
+        type: number
+        required: false
+    script: |
+      d = arg("dir")
+      if d == ""
+        d = "/var/log"
+      end
+      dy = itoa(atoi(arg("days")))
+      if dy == "0"
+        dy = "30"
+      end
+      before = atoi(cmd("du -sb '" + d + "' 2>/dev/null | awk '{print $1}'"))
+      n = atoi(cmd("find '" + d + "' -name '*.log*' -type f -mtime +" + dy + " -delete 2>/dev/null | wc -l"))
+      after = atoi(cmd("du -sb '" + d + "' 2>/dev/null | awk '{print $1}'"))
+      freed = fmt_bytes(max(before - after, 0))
+      ret("已删除 " + itoa(n) + " 个过期日志，释放 " + freed)
+
+tasks:
+  - id: weekly
+    every: 604800
+    desc: 每周清理 /var/log 下超过 30 天的日志
+    script: |
+      cmd("find /var/log -name '*.log*' -type f -mtime +30 -delete 2>/dev/null")
+      log("每周过期日志清理完成")

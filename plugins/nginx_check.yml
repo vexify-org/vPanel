@@ -1,0 +1,37 @@
+# vPanel 插件：Nginx 站点与配置检查
+name: nginx_check
+version: 1.0.0
+desc: 检查 Nginx 配置有效性、站点(vhost)数量与启用的站点列表（使用路径内置函数）
+url: plugins/nginx_check.yml
+
+tools:
+  - id: configtest
+    desc: 测试 Nginx 配置语法是否有效
+    script: |
+      out = cmd("nginx -t 2>&1")
+      if contains(out, "syntax is ok") || contains(out, "successful")
+        ret("Nginx 配置有效 ✓\n" + trim(out))
+      else
+        ret("Nginx 配置存在问题 ✗\n" + trim(out))
+      end
+
+  - id: vhosts
+    desc: 列出 sites-enabled 下的站点配置文件名与数量
+    script: |
+      out = cmd("ls /etc/nginx/sites-enabled/ 2>/dev/null")
+      names = lines(out)
+      base = ""
+      for n in names
+        base = base + basename(trim(n)) + "\n"
+      end
+      ret("已启用站点数: " + itoa(len(names)) + "\n" + base)
+
+  - id: errors
+    desc: 统计最近 100 行错误日志中的各级别条目
+    script: |
+      out = cmd("tail -200 /var/log/nginx/error.log 2>/dev/null | grep -oE '\\[(error|emerg|crit|warn|notice)\\]' | sort | uniq -c | sort -rn")
+      if trim(out) == ""
+        ret("无错误日志或日志为空")
+      else
+        ret("" + out)
+      end

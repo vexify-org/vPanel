@@ -1,0 +1,30 @@
+# vPanel 插件：防火墙状态
+name: firewall_status
+version: 1.0.0
+desc: 检查 iptables/nftables 防火墙：是否启用、规则数量、默认策略
+url: plugins/firewall_status.yml
+
+tools:
+  - id: check
+    desc: 返回防火墙概况：iptables 规则总数、INPUT 默认策略、nft 是否在使用
+    script: |
+      fp = cmd("iptables -L INPUT -n 2>/dev/null | grep -m1 'policy' || echo 未安装")
+      cnt = cmd("iptables -S 2>/dev/null | grep -v '^-P' | wc -l")
+      nft = cmd("nft list ruleset >/dev/null 2>&1 && echo 正在使用nftables || echo 未检测到nftables")
+      ret("IPTABLES INPUT 策略: " + trim(fp) + "\niptables 规则数: " + trim(cnt) + "\nnftables: " + trim(nft))
+
+  - id: listen
+    desc: 列出当前正在监听的端口（判断暴露面，便于核对防火墙放行）
+    script: |
+      out = cmd("ss -tulnp 2>/dev/null | awk 'NR>1{print $1, $4, $6}' | sed 's/users:.*//' | head -50")
+      ret("监听中的端口/服务：\n" + out)
+
+  - id: rules
+    desc: 导出 IPv4 输入链放行的来源与端口规则
+    script: |
+      out = cmd("iptables -L INPUT -n --line-numbers 2>/dev/null | head -40")
+      if trim(out) == ""
+        ret("无 iptables INPUT 规则（或未安装）")
+      else
+        ret("" + out)
+      end

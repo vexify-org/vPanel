@@ -1,0 +1,34 @@
+# vPanel 插件：软件包审计
+name: pkg_audit
+version: 1.0.0
+desc: 统计已安装软件包、可升级数量、孤儿(autoremove)包，便于系统维护
+url: plugins/pkg_audit.yml
+
+tools:
+  - id: audit
+    desc: 汇总已安装/可升级/可清理孤儿包数量
+    script: |
+      inst = cmd("dpkg -l 2>/dev/null | grep -c '^ii' || rpm -qa 2>/dev/null | wc -l")
+      up = cmd("apt list --upgradable 2>/dev/null | grep -c 'upgradable' || echo 0")
+      rm = cmd("apt-get --simulate autoremove 2>/dev/null | grep -oE '[0-9]+ upgraded.*' | grep -oE '^[0-9]+' || echo 0")
+      ret("已安装: " + trim(inst) + "\n可升级: " + trim(up) + "\n可清理孤儿包(近似): " + trim(rm))
+
+  - id: upgradable
+    desc: 列出可升级的软件包（前 30 个）
+    script: |
+      out = cmd("apt list --upgradable 2>/dev/null | tail -n +2 | head -30 | awk -F/ '{print $1}'")
+      if trim(out) == ""
+        ret("系统已是最新，无待升级包")
+      else
+        ret("待升级包：\n" + out)
+      end
+
+tasks:
+  - id: checkupdate
+    every: 86400
+    desc: 每天检查一次是否有可用升级
+    script: |
+      n = cmd("apt list --upgradable 2>/dev/null | grep -c 'upgradable'")
+      if atoi(trim(n)) > 0
+        log("有 " + trim(n) + " 个软件包可升级")
+      end

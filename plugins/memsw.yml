@@ -1,0 +1,46 @@
+# vPanel 插件：内存 / 交换健康检查
+name: memsw
+version: 1.0.0
+desc: 以人类可读格式展示内存/交换占用，可定时告警（阈值可调）
+url: plugins/memsw.yml
+
+tools:
+  - id: status
+    desc: 查看内存/交换占用（可读格式）
+    script: |
+      mi = cmd("free -b | awk '/Mem:/{print $2, $3, $7}'")
+      w = words(mi)
+      total = fmt_bytes(atoi(at(w, 0)))
+      used = fmt_bytes(atoi(at(w, 1)))
+      avail = fmt_bytes(atoi(at(w, 2)))
+      si = cmd("free -b | awk '/Swap:/{print $2, $3}'")
+      sw = words(si)
+      stotal = fmt_bytes(atoi(at(sw, 0)))
+      sused = fmt_bytes(atoi(at(sw, 1)))
+      pct = round((atoi(at(w, 1)) / max(atoi(at(w, 0)), 1)) * 100)
+      ret("内存: 总 " + total + " / 用 " + used + " / 可用 " + avail + " (" + itoa(pct) + "%)\n交换: 总 " + stotal + " / 用 " + sused)
+
+  - id: tight
+    desc: 检查是否接近内存耗尽，返回危险项
+    params:
+      - id: warn
+        name: 告警阈值(%) 默认90
+        type: number
+        required: false
+    script: |
+      wl = itoa(atoi(arg("warn")))
+      if wl == "0"
+        wl = "90"
+      end
+      w = words(cmd("free | awk '/Mem:/{print $3, $2}'"))
+      used = atoi(at(w, 0))
+      total = atoi(at(w, 1))
+      if total == 0
+        total = 1
+      end
+      mem_pct = round((used / total) * 100)
+      if mem_pct >= atoi(wl)
+        ret("危险: 内存达到 " + itoa(mem_pct) + "% (阈值 " + wl + "%)! 建议清理进程或加内存")
+      else
+        ret("内存占用 " + itoa(mem_pct) + "%，处于安全区间(阈值 " + wl + "%)")
+      end

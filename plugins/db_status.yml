@@ -1,0 +1,38 @@
+# vPanel 插件：常见数据库服务状态
+name: db_status
+version: 1.0.0
+desc: 检查 MySQL/MariaDB/PostgreSQL/Redis 等常见数据库服务的端口与进程状态
+url: plugins/db_status.yml
+
+tools:
+  - id: check
+    desc: 返回各常见数据库服务是否在监听及其端口
+    script: |
+      mysql = cmd("ss -tlnp 2>/dev/null | grep -E ':3306' >/dev/null && echo 'MySQL   :3306  ✓在运行' || echo 'MySQL   :3306  ✗未运行'")
+      maria = cmd("ss -tlnp 2>/dev/null | grep -E ':3307' >/dev/null && echo ':3307 ✓' || true")
+      pg = cmd("ss -tlnp 2>/dev/null | grep -E ':5432' >/dev/null && echo 'Postgres :5432  ✓在运行' || echo 'Postgres :5432  ✗未运行'")
+      redis = cmd("ss -tlnp 2>/dev/null | grep -E ':6379' >/dev/null && echo 'Redis    :6379  ✓在运行' || echo 'Redis    :6379  ✗未运行'")
+      mongo = cmd("ss -tlnp 2>/dev/null | grep -E ':27017' >/dev/null && echo 'MongoDB :27017  ✓在运行' || echo 'MongoDB :27017  ✗未运行'")
+      ret("" + trim(mysql) + "\n" + pg + "\n" + redis + "\n" + mongo)
+
+  - id: listen_all
+    desc: 列出系统所有正在监听的 TCP 端口及对应的进程名
+    script: |
+      out = cmd("ss -tlnp 2>/dev/null | awk 'NR>1{split($4,a,\":\"); p=a[length(a)]; print p, $6}' | sed 's/users:.*//' | sort -n -u | head -60")
+      ret("端口 -> 进程\n" + out)
+
+  - id: probe
+    desc: 探测指定 TCP 端口是否开放
+    params:
+      - id: port
+        name: 端口号
+        type: number
+        required: true
+    script: |
+      p = arg("port")
+      out = cmd("ss -tln 2>/dev/null | grep -E ':" + p + "' | awk '{print $1, $4}'")
+      if trim(out) == ""
+        ret("端口 " + p + " 未在监听")
+      else
+        ret("端口 " + p + " 在监听：" + trim(out))
+      end

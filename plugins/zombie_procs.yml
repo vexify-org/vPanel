@@ -1,0 +1,29 @@
+# vPanel 插件：僵尸进程
+name: zombie_procs
+version: 1.0.0
+desc: 检测系统僵尸(defunct)/孤儿进程的数量与详情，帮助排查失控进程
+url: plugins/zombie_procs.yml
+
+tools:
+  - id: scan
+    desc: 统计僵尸(D)/孤儿(Z)状态进程数，并列出前 10 个
+    script: |
+      z = cmd("ps -eo state,pid,ppid,comm | awk '$1==\"Z\" || $1==\"D\"'")
+      zn = cmd("ps -eo state | grep -c '^ *[ZD]'")
+      if atoi(trim(zn)) == 0
+        ret("无僵尸(D)或不可中断(D_state)进程，系统健康")
+      else
+        list = cmd("ps -eo state,pid,ppid,comm --sort=+state | grep -E '^ *[ZD]' | head -10")
+        ret("检测到 " + trim(zn) + " 个特殊状态进程（D=不可中断 / Z=僵尸）：\n" + list + "\n\n僵尸进程通常由父进程未回收导致，可重启父进程或 reboot 恢复。")
+      end
+
+  - id: orphan
+    desc: 列出父进程已为 init(1) 的孤儿进程
+    script: |
+      out = cmd("ps -eo pid,ppid,comm | awk '$2==1 && $1!=1 {print}' | head -20")
+      if trim(out) == ""
+        ret("没有孤儿进程（或无法读取）")
+      else
+        c = cmd("ps -eo ppid | grep -c '^ *1$'")
+        ret("孤儿进程数: " + trim(c) + "\n" + out)
+      end

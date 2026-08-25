@@ -1,0 +1,40 @@
+# vPanel 插件：半开连接检测（SYN/DDoS 苗头）
+name: conn_stats
+version: 1.0.0
+desc: 分析 TCP 连接状态分布，重点检测 SYN_RECV 半开连接数量（DDoS/扫描苗头）
+url: plugins/conn_stats.yml
+
+tools:
+  - id: states
+    desc: 统计各类 TCP 状态数量与连接总量
+    script: |
+      total = cmd("ss -tan 2>/dev/null | wc -l")
+      syn = cmd("ss -tan state syn-recv 2>/dev/null | tail -n +2 | wc -l")
+      est = cmd("ss -tan state established 2>/dev/null | tail -n +2 | wc -l")
+      tw = cmd("ss -tan state time-wait 2>/dev/null | tail -n +2 | wc -l")
+      ret("TCP 连接总量: " + trim(total) + "\n已建立: " + trim(est) + " / SYN_RECV: " + trim(syn) + " / TIME_WAIT: " + trim(tw))
+
+  - id: heavy_syn
+    desc: 按来源 IP 统计 SYN_RECV 连接数，识别疑似扫描/攻击源（TOP 15）
+    script: |
+      out = cmd("ss -tan state syn-recv 2>/dev/null | awk 'NR>1{split($5,a,\":\");print a[1]}' | sort | uniq -c | sort -rn | head -15")
+      if trim(out) == ""
+        ret("当前无积压的 SYN_RECV 半开连接")
+      else
+        ret("SYN_RECV 来源 TOP：\n" + out)
+      end
+
+  - id: fuzz
+    desc: 汇总分析（注意：可能把正常多连接误报，仅供排查参考）
+    script: |
+      syn = cmd("ss -tan state syn-recv 2>/dev/null | tail -n +2 | wc -l")
+      s = atoi(trim(syn))
+      if s > 200
+        ret("警告：SYN_RECV 达到 " + itoa(s) + "，疑似 SYN Flood / DDoS，请检查防火墙限速与白名单。")
+      else
+        if s > 30
+          ret("注意：SYN_RECV=" + itoa(s) + "，偏高，建议关注。")
+        else
+          ret("SYN_RECV=" + itoa(s) + "，处于正常范围。")
+        end
+      end

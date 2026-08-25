@@ -1,0 +1,36 @@
+# vPanel 插件：时间同步检查
+name: time_sync
+version: 1.0.0
+desc: 检查系统时间是否与 NTP 同步、漂移量，列出已配置的时间源
+url: plugins/time_sync.yml
+
+tools:
+  - id: check
+    desc: 返回时间同步状态：是否已同步、引用源、系统时间
+    script: |
+      sync = cmd("timedatectl show -p NTP 2>/dev/null | cut -d= -f2")
+      active = cmd("timedatectl show -p NTPSynchronized 2>/dev/null | cut -d= -f2")
+      source = cmd("timedatectl show -p NTPServers 2>/dev/null | cut -d= -f2")
+      now = cmd("date '+%Y-%m-%d %H:%M:%S %Z'")
+      if trim(active) == "yes"
+        st = "已同步"
+      else
+        st = "未同步"
+      end
+      ret("NTP: " + trim(sync) + "\n同步状态: " + st + "\n时间源: " + trim(source) + "\n当前时间: " + trim(now))
+
+  - id: offset
+    desc: 查询与时间源的时间偏移（需 ntpd/systemd-timesyncd 支持）
+    script: |
+      off = cmd("chronyc tracking 2>/dev/null | grep -i 'System time' || ntpq -c rv 2>/dev/null | grep -i offset")
+      if trim(off) == ""
+        ret("未安装 chrony/ntpq，无法获取偏移量")
+      else
+        ret("" + trim(off))
+      end
+
+  - id: resync
+    desc: 立即强制同步一次时间（需 root）
+    script: |
+      out = cmd("timedatectl set-ntp true 2>/dev/null; systemctl restart systemd-timesyncd 2>/dev/null; chronyc makestep 2>/dev/null; echo 已触发同步")
+      ret("" + trim(out))

@@ -1,0 +1,47 @@
+# vPanel 插件：批量端点探活
+name: endpoint_probe
+version: 1.0.0
+desc: 对逗号分隔的 URL 列表批量探测 HTTP 状态码与可用性统计
+url: plugins/endpoint_probe.yml
+
+tools:
+  - id: probe
+    desc: 探测端点：输入 url(逗号分隔)，返回每个地址的状态码与汇总
+    params:
+      - id: url
+        name: 地址列表(逗号分隔)
+        type: string
+        required: true
+    script: |
+      urls = split_list(arg("url"), ",")
+      up = 0
+      down = 0
+      detail = ""
+      for u in urls
+        u2 = trim(u)
+        if u2 == ""
+          continue
+        end
+        code = http_status(u2)
+        ok = "DOWN"
+        if startswith(code, "2") || startswith(code, "3")
+          ok = "UP"
+          up = up + 1
+        else
+          down = down + 1
+        end
+        detail = detail + ok + " " + code + " " + u2 + "\n"
+      end
+      ret("共 " + itoa(len(urls)) + " 个端点: ✓" + itoa(up) + " 正常 / ✗" + itoa(down) + " 异常\n" + detail)
+
+tasks:
+  - id: every5m
+    every: 300
+    desc: 每 5 分钟对 demo 站点做一次探活并记日志
+    script: |
+      c = http_status("https://example.com")
+      if startswith(c, "2") || startswith(c, "3")
+        log("端点探活正常，HTTP " + c)
+      else
+        log("告警: example.com 探活异常，HTTP " + c)
+      end

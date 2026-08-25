@@ -12,6 +12,7 @@
 //! - 内置函数：cmd/fetch/ret/log/env/var/arg + 文本/数学/KV
 
 use std::collections::HashMap;
+use sha2::Sha256;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 // ---------------------------------------------------------------------------
@@ -917,6 +918,100 @@ impl<'a> Interp<'a> {
                 }
             }
 
+            // ---- 新增：JSON 读取 / 格式化 / 列表 / 编解码 ----
+            "json_get" => Ok(V::S(json_get_value(&s(&one), &s(&two)).unwrap_or_default())),
+            "keys" => {
+                let ks = object_keys(&s(&one));
+                Ok(V::L(ks))
+            }
+            "compact" => Ok(V::S(json_compact(&s(&one)))),
+            "fmt_bytes" => Ok(V::S(fmt_bytes(one.as_num()))),
+            "fmt_dur" => Ok(V::S(fmt_dur(one.as_num()))),
+            "sortlist" => {
+                let mut v = one.list().unwrap_or(&[]).to_vec();
+                v.sort();
+                Ok(V::L(v))
+            }
+            "uniq" => {
+                let mut seen = std::collections::HashSet::new();
+                let mut v: Vec<String> = Vec::new();
+                for it in one.list().unwrap_or(&[]) {
+                    if seen.insert(it.clone()) {
+                        v.push(it.clone());
+                    }
+                }
+                Ok(V::L(v))
+            }
+            "words" => {
+                let w: Vec<String> = s(&one).split_whitespace().map(|p| p.to_string()).collect();
+                Ok(V::L(w))
+            }
+            "b64" => Ok(V::S(base64_encode(s(&one).as_bytes()))),
+            "b64d" => Ok(V::S(String::from_utf8_lossy(&base64_decode(&s(&one))).into_owned())),
+            "glob" => Ok(V::B(glob_match(&s(&one), &s(&two)))),
+            "repeat" => Ok(V::S(s(&one).repeat(two.as_num().max(0.0) as usize))),
+
+            // ---- 更多增强：哈希 / URL / 路径 / 统计 / 工具 ----
+            "sha256" => Ok(V::S(hex_of(&sha256_digest(s(&one).as_bytes())))),
+            "urldec" => Ok(V::S(urldecode(&s(&one)))),
+            "basename" => Ok(V::S(
+                s(&one).rsplit('/').next().map(|p| p.trim_end_matches('/').to_string()).unwrap_or_default(),
+            )),
+            "dirname" => {
+                let p = s(&one);
+                let e = p.rsplit('/').next().map(|p| p.trim_end_matches('/').to_string()).unwrap_or_default();
+                let d = &p[..p.len() - e.len()];
+                Ok(V::S(d.trim_end_matches('/').to_string()))
+            }
+            "extname" => {
+                let b = s(&one).rsplit('/').next().unwrap_or_default().to_string();
+                let idx = b.rfind('.');
+                Ok(V::S(match idx {
+                    Some(i) if i > 0 => b[i + 1..].to_string(),
+                    _ => String::new(),
+                }))
+            }
+            "sum" => {
+                let mut t = 0.0;
+                for it in one.list().unwrap_or(&[]) {
+                    t += parse_num(it);
+                }
+                Ok(V::N(t))
+            }
+            "avg" => {
+                let a = one.list().unwrap_or(&[]);
+                if a.is_empty() {
+                    Ok(V::N(0.0))
+                } else {
+                    let mut t = 0.0;
+                    for it in a {
+                        t += parse_num(it);
+                    }
+                    Ok(V::N(t / a.len() as f64))
+                }
+            }
+            "pct" => {
+                let p = one.as_num();
+                let t = two.as_num();
+                if t == 0.0 {
+                    Ok(V::N(0.0))
+                } else {
+                    Ok(V::N(round1((p / t) * 100.0)))
+                }
+            }
+            "uuid" => Ok(V::S(uuid4())),
+            "hostname" => {
+                let hn = std::fs::read_to_string("/proc/sys/kernel/hostname")
+                    .map(|s| s.trim().to_string())
+                    .or_else(|_| std::env::var("HOSTNAME"))
+                    .unwrap_or_default();
+                Ok(V::S(hn))
+            }
+            "hexenc" => Ok(V::S(hex_of(s(&one).as_bytes()))),
+            "hexdec" => Ok(V::S(String::from_utf8_lossy(&hex_decode(&s(&one))).into_owned())),
+            "esc" => Ok(V::S(sh_quote(&s(&one)))),
+            "unsh" => Ok(V::S(json_quote(&s(&one)))),
+
             other => Err(format!("未知函数: {}", other)),
         }
     }
@@ -1042,6 +1137,576 @@ fn json_quote(s: &str) -> String {
     }
     out.push('"');
     out
+}
+
+// ---------------------------------------------------------------------------
+// 新增工具函数（供插件 DSL 调用）
+// ---------------------------------------------------------------------------
+
+/// 取 JSON 中 `path`（点路径，如 `a.b` / `list[0]`）对应值的文本表示。
+/// 字符串自动去引号、对象/数组合并成紧凑文本。
+fn json_get_value(json: &str, path: &str) -> Option<String> {
+    let mut cur = json.trim().to_string();
+    for seg in path.split('.') {
+        let (key, idx) = match seg.split_once('[') {
+            Some((k, rest)) => {
+                let i = rest.trim_end_matches(']').trim().parse::<usize>().ok();
+                (k, i)
+            }
+            None => (seg, None),
+        };
+        let needle = format!("\"{}\"", key);
+        let mut pos = 0;
+        let value = loop {
+            let rel = cur[pos..].find(&needle)?;
+            let s0 = pos + rel;
+            let after = cur[s0 + needle.len()..].trim_start();
+            if after.starts_with(':') {
+                break after[1..].trim_start();
+            }
+            pos = s0 + needle.len();
+        };
+        let raw = take_json_value(value)?;
+        // 数组下标：只在 raw 为数组时按逗号分割取第 idx 个元素。
+        if let Some(i) = idx {
+            let raw = if raw.starts_with('[') { &raw[1..raw.len() - 1] } else { raw };
+            let elems = split_top_level(raw);
+            let v = elems.get(i).copied().unwrap_or("");
+            cur = optional_unquote(v.trim()).to_string();
+        } else if raw.trim_start().starts_with('{') || raw.trim_start().starts_with('[') {
+            // 仍有嵌套 → 继续向下传
+            cur = raw.to_string();
+        } else {
+            cur = optional_unquote(raw.trim()).to_string();
+        }
+    }
+    if cur.trim_start().starts_with('{') || cur.trim_start().starts_with('[') {
+        Some(json_compact(&cur))
+    } else {
+        Some(cur)
+    }
+}
+
+/// 取 JSON 中紧跟冒号后的一个完整值（按引号/转义/嵌套平衡切分）。
+fn take_json_value(s: &str) -> Option<&str> {
+    let t = s.trim_start();
+    let first = t.chars().next()?;
+    match first {
+        '{' | '[' => {
+            let mut depth = 0i32;
+            let mut in_str = false;
+            let mut esc = false;
+            for (i, c) in t.char_indices() {
+                if esc {
+                    esc = false;
+                    continue;
+                }
+                if c == '\\' {
+                    esc = true;
+                    continue;
+                }
+                if c == '"' {
+                    in_str = !in_str;
+                    continue;
+                }
+                if in_str {
+                    continue;
+                }
+                match c {
+                    '{' | '[' => depth += 1,
+                    '}' | ']' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return Some(&t[..=i]);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+        '"' => {
+            let mut esc = false;
+            for (i, c) in t.char_indices().skip(1) {
+                if esc {
+                    esc = false;
+                    continue;
+                }
+                if c == '\\' {
+                    esc = true;
+                    continue;
+                }
+                if c == '"' {
+                    return Some(&t[..=i]);
+                }
+            }
+            None
+        }
+        _ => {
+            let mut end = t.len();
+            let mut esc = false;
+            let mut in_quote = false;
+            for (i, c) in t.char_indices() {
+                if esc {
+                    esc = false;
+                    continue;
+                }
+                if c == '\\' {
+                    esc = true;
+                    continue;
+                }
+                if c == '"' {
+                    in_quote = !in_quote;
+                    continue;
+                }
+                if !in_quote && (c == ',' || c == '}' || c == ']' || c == '\n' || c == '\r') {
+                    end = i;
+                    break;
+                }
+            }
+            Some(&t[..end])
+        }
+    }
+}
+
+/// 顶层逗号分割（忽略引号内与嵌套括号），用于取数组元素。
+fn split_top_level(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut depth = 0i32;
+    let mut in_str = false;
+    let mut esc = false;
+    for (i, c) in s.char_indices() {
+        if esc {
+            esc = false;
+            continue;
+        }
+        if c == '\\' {
+            esc = true;
+            continue;
+        }
+        if c == '"' {
+            in_str = !in_str;
+            continue;
+        }
+        if in_str {
+            continue;
+        }
+        match c {
+            '{' | '[' => depth += 1,
+            '}' | ']' => depth -= 1,
+            ',' if depth == 0 => {
+                parts.push(&s[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&s[start..]);
+    parts
+}
+
+/// 字符串值去掉首尾引号并解转义；非字符串原样返回。
+fn optional_unquote(v: &str) -> String {
+    let t = v.trim();
+    let bytes = t.as_bytes();
+    if !t.starts_with('"') || bytes.len() < 2 || *bytes.last().unwrap() != b'"' {
+        return t.to_string();
+    }
+    let inner = &t[1..t.len() - 1];
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('t') => out.push('\t'),
+            Some('"') => out.push('"'),
+            Some('\\') => out.push('\\'),
+            Some(o) => {
+                out.push('\\');
+                out.push(o);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+/// 压缩 JSON：去掉引号外的空白。
+fn json_compact(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut in_str = false;
+    let mut esc = false;
+    for c in s.chars() {
+        if esc {
+            out.push(c);
+            esc = false;
+            continue;
+        }
+        if c == '\\' {
+            out.push(c);
+            esc = true;
+            continue;
+        }
+        if c == '"' {
+            in_str = !in_str;
+            out.push(c);
+            continue;
+        }
+        if in_str {
+            out.push(c);
+            continue;
+        }
+        if c.is_whitespace() {
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// 取对象顶层键名列表。
+fn object_keys(s: &str) -> Vec<String> {
+    let t = s.trim();
+    let mut keys = Vec::new();
+    if !t.starts_with('{') {
+        return keys;
+    }
+    let b = t.as_bytes();
+    let mut i = 0;
+    let mut in_str = false;
+    let mut esc = false;
+    let mut depth = 0i32;
+    while i < b.len() {
+        let c = b[i];
+        if esc {
+            esc = false;
+            i += 1;
+            continue;
+        }
+        if c == b'\\' {
+            esc = true;
+            i += 1;
+            continue;
+        }
+        if c == b'"' {
+            if depth == 1 && !in_str {
+                let mut j = i + 1;
+                let mut k = String::new();
+                esc = false;
+                while j < b.len() {
+                    let cj = b[j];
+                    if esc {
+                        k.push(cj as char);
+                        esc = false;
+                        j += 1;
+                        continue;
+                    }
+                    if cj == b'\\' {
+                        k.push(cj as char);
+                        esc = true;
+                        j += 1;
+                        continue;
+                    }
+                    if cj == b'"' {
+                        break;
+                    }
+                    k.push(cj as char);
+                    j += 1;
+                }
+                let mut p = j + 1;
+                while p < b.len() && (b[p] == b' ' || b[p] == b'\t' || b[p] == b'\n' || b[p] == b'\r') {
+                    p += 1;
+                }
+                if p < b.len() && b[p] == b':' {
+                    keys.push(k);
+                }
+                i = j + 1;
+                continue;
+            }
+            in_str = !in_str;
+            i += 1;
+            continue;
+        }
+        if !in_str {
+            match c {
+                b'{' => depth += 1,
+                b'}' => depth -= 1,
+                _ => {}
+            }
+        }
+        i += 1;
+    }
+    keys
+}
+
+/// 人类可读的字节大小，如 `1.5G` / `820M`。
+fn fmt_bytes(n: f64) -> String {
+    if n < 0.0 {
+        return "0B".to_string();
+    }
+    if n < 1024.0 {
+        return format!("{}B", n as i64);
+    }
+    let units = ["K", "M", "G", "T", "P"];
+    let mut v = n / 1024.0;
+    let mut u = 0;
+    while v >= 1024.0 && u < units.len() - 1 {
+        v /= 1024.0;
+        u += 1;
+    }
+    format!("{:.1}{}", v, units[u])
+}
+
+/// 人类可读的时长，如 `3d 4h 5m` / `1h 2m` / `45s`。
+fn fmt_dur(sec: f64) -> String {
+    let mut s = sec.floor().max(0.0) as i64;
+    let d = s / 86400;
+    s %= 86400;
+    let h = s / 3600;
+    s %= 3600;
+    let m = s / 60;
+    s %= 60;
+    if d > 0 {
+        format!("{}d {}h {}m", d, h, m)
+    } else if h > 0 {
+        format!("{}h {}m", h, m)
+    } else if m > 0 {
+        format!("{}m {}s", m, s)
+    } else {
+        format!("{}s", s)
+    }
+}
+
+/// Base64 编码（标准字母表 + `=` 填充）。
+fn base64_encode(d: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((d.len() + 2) / 3 * 4);
+    let mut i = 0;
+    while i + 3 <= d.len() {
+        let n = ((d[i] as u32) << 16) | ((d[i + 1] as u32) << 8) | (d[i + 2] as u32);
+        out.push(T[(n >> 18) as usize & 63] as char);
+        out.push(T[(n >> 12) as usize & 63] as char);
+        out.push(T[(n >> 6) as usize & 63] as char);
+        out.push(T[n as usize & 63] as char);
+        i += 3;
+    }
+    let rem = d.len() - i;
+    if rem == 1 {
+        let n = (d[i] as u32) << 16;
+        out.push(T[(n >> 18) as usize & 63] as char);
+        out.push(T[(n >> 12) as usize & 63] as char);
+        out.push('=');
+        out.push('=');
+    } else if rem == 2 {
+        let n = ((d[i] as u32) << 16) | ((d[i + 1] as u32) << 8);
+        out.push(T[(n >> 18) as usize & 63] as char);
+        out.push(T[(n >> 12) as usize & 63] as char);
+        out.push(T[(n >> 6) as usize & 63] as char);
+        out.push('=');
+    }
+    out
+}
+
+/// Base64 解码（容错空白，忽略非法字符）。
+fn base64_decode(s: &str) -> Vec<u8> {
+    let val = |c: u8| -> i32 {
+        match c {
+            b'A'..=b'Z' => (c - b'A') as i32,
+            b'a'..=b'z' => (c - b'a' + 26) as i32,
+            b'0'..=b'9' => (c - b'0' + 52) as i32,
+            b'+' => 62,
+            b'/' => 63,
+            _ => -1,
+        }
+    };
+    let b: Vec<u8> = s
+        .bytes()
+        .filter(|c| !matches!(c, b'=' | b'\n' | b'\r' | b' ' | b'\t'))
+        .collect();
+    let mut out = Vec::with_capacity(b.len() / 4 * 3);
+    let clear = |i: usize| val(b[i]) as u32;
+    let mut i = 0;
+    while i + 4 <= b.len() {
+        let n = (clear(i) << 18) | (clear(i + 1) << 12) | (clear(i + 2) << 6) | clear(i + 3);
+        out.push((n >> 16) as u8);
+        out.push((n >> 8) as u8);
+        out.push(n as u8);
+        i += 4;
+    }
+    let rem = b.len() - i;
+    if rem >= 3 {
+        let n = (clear(i) << 18) | (clear(i + 1) << 12) | (clear(i + 2) << 6);
+        out.push((n >> 16) as u8);
+        out.push((n >> 8) as u8);
+    } else if rem == 2 {
+        let n = (clear(i) << 18) | (clear(i + 1) << 12);
+        out.push((n >> 16) as u8);
+    }
+    out
+}
+
+/// 解析字符串为数字（兼容 `1.5G`、`512K` 等带单位值）。
+fn parse_num(s: &str) -> f64 {
+    let t = s.trim();
+    if t.is_empty() {
+        return 0.0;
+    }
+    let (val, mult) = match t.as_bytes().last() {
+        Some(&b'k') | Some(&b'K') => (&t[..t.len() - 1], 1024.0),
+        Some(&b'm') | Some(&b'M') => (&t[..t.len() - 1], 1024.0 * 1024.0),
+        Some(&b'g') | Some(&b'G') => (&t[..t.len() - 1], 1024.0 * 1024.0 * 1024.0),
+        Some(&b'%') => (&t[..t.len() - 1], 1.0),
+        _ => (t, 1.0),
+    };
+    val.trim().parse::<f64>().unwrap_or(0.0) * mult
+}
+
+/// 保留一位小数。
+fn round1(n: f64) -> f64 {
+    (n * 10.0).round() / 10.0
+}
+
+/// 生成随机 v4 UUID。
+fn uuid4() -> String {
+    let mut rng = tiny_rand();
+    let mut b = [0u8; 16];
+    for x in b.iter_mut() {
+        *x = rng();
+    }
+    b[6] = (b[6] & 0x0f) | 0x40; // 版本 4
+    b[8] = (b[8] & 0x3f) | 0x80; // 变体
+    hex_of(&b[0..4]) + "-" + &hex_of(&b[4..6]) + "-" + &hex_of(&b[6..8]) + "-"
+        + &hex_of(&b[8..10]) + "-" + &hex_of(&b[10..16])
+}
+
+/// 极简确定性伪随机（线性同余），每次脚本新建。
+fn tiny_rand() -> impl FnMut() -> u8 {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static SEED: AtomicU32 = AtomicU32::new(0x9e3779b9);
+    let seed = SEED.fetch_add(0x9e3779b9, Ordering::Relaxed);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u32)
+        .unwrap_or(0);
+    let mut state = seed.rotate_left(13).wrapping_add(now);
+    state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+    move || {
+        state = state.wrapping_mul(1103515245).wrapping_add(12345);
+        (state >> 16) as u8
+    }
+}
+
+/// 字节 → 小写十六进制。
+fn hex_of(d: &[u8]) -> String {
+    const H: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(d.len() * 2);
+    for &x in d {
+        out.push(H[(x >> 4) as usize] as char);
+        out.push(H[(x & 0x0f) as usize] as char);
+    }
+    out
+}
+
+/// 十六进制字符串 → 字节（忽略非法字符）。
+fn hex_decode(s: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(s.len() / 2);
+    let mut hi: Option<u8> = None;
+    for c in s.bytes() {
+        let v = match c {
+            b'0'..=b'9' => c - b'0',
+            b'a'..=b'f' => c - b'a' + 10,
+            b'A'..=b'F' => c - b'A' + 10,
+            _ => continue,
+        };
+        match hi {
+            None => hi = Some(v),
+            Some(h) => {
+                out.push((h << 4) | v);
+                hi = None;
+            }
+        }
+    }
+    out
+}
+
+/// 计算 SHA-256 摘要（复用 sha2 crate）。
+fn sha256_digest(data: &[u8]) -> Vec<u8> {
+    use sha2::Digest;
+    let mut h = Sha256::new();
+    h.update(data);
+    h.finalize().to_vec()
+}
+
+/// URL 解码：`%XX` → 字节，`+` → 空格。
+fn urldecode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        if c == b'+' {
+            out.push(b' ');
+            i += 1;
+        } else if c == b'%' && i + 2 < b.len() {
+            let h = (b[i + 1] as char).to_digit(16);
+            let l = (b[i + 2] as char).to_digit(16);
+            if let (Some(h), Some(l)) = (h, l) {
+                out.push((h * 16 + l) as u8);
+                i += 3;
+            } else {
+                out.push(c);
+                i += 1;
+            }
+        } else {
+            out.push(c);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// 简易 shell 单引号包裹（含单引号时替换为 `'\"'\"'`）。
+fn sh_quote(s: &str) -> String {
+    if s.contains('\'') {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    } else {
+        format!("'{}'", s)
+    }
+}
+
+/// 通配符匹配：`*` 匹配任意（含空）串，`?` 匹配单字符。
+fn glob_match(text: &str, pat: &str) -> bool {
+    fn m(t: &[u8], p: &[u8]) -> bool {
+        if p.is_empty() {
+            return t.is_empty();
+        }
+        match p[0] {
+            b'*' => {
+                let mut i = 1;
+                while i < p.len() && p[i] == b'*' {
+                    i += 1;
+                }
+                if i == p.len() {
+                    return true;
+                }
+                for j in 0..=t.len() {
+                    if m(&t[j..], &p[i..]) {
+                        return true;
+                    }
+                }
+                false
+            }
+            b'?' => !t.is_empty() && m(&t[1..], &p[1..]),
+            c => !t.is_empty() && t[0] == c && m(&t[1..], &p[1..]),
+        }
+    }
+    m(text.as_bytes(), pat.as_bytes())
 }
 
 #[cfg(test)]
@@ -1217,5 +1882,105 @@ mod tests {
         let (v3, _, r3) = run("ret(rand(5,5))", HashMap::new());
         assert!(r3.is_ok());
         assert_eq!(v3, "5");
+    }
+
+    #[test]
+    fn new_helpers_json() {
+        let (v, _, r) = run(
+            "j = \"{\\\"a\\\":1,\\\"b\\\":\\\"hi\\\",\\\"n\\\":[\\\"x\\\",\\\"y\\\"]}\"\nret(json_get(j, \"b\"))",
+            HashMap::new(),
+        );
+        assert!(r.is_ok());
+        assert_eq!(v, "hi");
+        // 数组下标
+        let (v2, _, r2) = run(
+            "j = \"{\\\"n\\\":[\\\"x\\\",\\\"y\\\"]}\"\nret(json_get(j, \"n[1]\"))",
+            HashMap::new(),
+        );
+        assert!(r2.is_ok());
+        assert_eq!(v2, "y");
+        // numeric
+        let (v3, _, r3) = run(
+            "j = \"{\\\"a\\\":1,\\\"b\\\":\\\"c\\\"}\"\nret(json_get(j, \"a\"))",
+            HashMap::new(),
+        );
+        assert!(r3.is_ok());
+        assert_eq!(v3, "1");
+    }
+
+    #[test]
+    fn new_helpers_keys_fmt() {
+        let (v, _, r) = run(
+            "j = \"{\\\"a\\\":1,\\\"b\\\":2}\"\nks = keys(j)\nret(join(ks, \"|\"))",
+            HashMap::new(),
+        );
+        assert!(r.is_ok());
+        assert_eq!(v, "a|b");
+        let (v2, _, r2) = run("ret(fmt_bytes(1536))", HashMap::new());
+        assert!(r2.is_ok());
+        assert!(v2.ends_with('K'));
+        let (v3, _, r3) = run("ret(fmt_dur(3661))", HashMap::new());
+        assert!(r3.is_ok());
+        assert!(v3.contains('h') && v3.contains('m'));
+    }
+
+    #[test]
+    fn new_helpers_hash_path_stats() {
+        // sha256 为 64 位小写 hex
+        let (v, _, r) = run("ret(sha256(\"abc\"))", HashMap::new());
+        assert!(r.is_ok());
+        assert_eq!(v, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        // urldec
+        let (v, _, r) = run("ret(urldec(\"a+b%20c\"))", HashMap::new());
+        assert!(r.is_ok());
+        assert_eq!(v, "a b c");
+        // 路径
+        let (v, _, r) = run("ret(basename(\"/etc/nginx.conf\") + \";\" + dirname(\"/etc/nginx.conf\") + \";\" + extname(\"/a/b.tar.gz\"))", HashMap::new());
+        assert!(r.is_ok());
+        assert_eq!(v, "nginx.conf;/etc;gz");
+        // 统计
+        let (v, _, r) = run("n = lines(\"1\\n2\\n3\")\nret(itoa(sum(n)) + \";\" + itoa(avg(n)))", HashMap::new());
+        assert!(r.is_ok());
+        assert_eq!(v, "6;2");
+        // 百分比与 UUID 长度
+        let (v, _, r) = run("ret(pct(25, 100))", HashMap::new());
+        assert!(r.is_ok());
+        assert_eq!(v, "25");
+        let (v, _, r) = run("ret(len(uuid()))", HashMap::new());
+        assert!(r.is_ok());
+        assert_eq!(v, "36");
+        // hex 编解码
+        let (v, _, r) = run("ret(hexdec(hexenc(\"hi\")))", HashMap::new());
+        assert!(r.is_ok());
+        assert_eq!(v, "hi");
+    }
+
+    #[test]
+    fn new_helpers_b64_glob() {
+        let (v, _, r) = run("ret(b64(\"hello\"))", HashMap::new());
+        assert!(r.is_ok());
+        assert_eq!(v, "aGVsbG8=");
+        let (v2, _, r2) = run("ret(b64d(\"aGVsbG8=\"))", HashMap::new());
+        assert!(r2.is_ok());
+        assert_eq!(v2, "hello");
+        let (v3, _, r3) = run("ret(glob(\"access.log\", \"access.*\"))", HashMap::new());
+        assert!(r3.is_ok());
+        assert_eq!(v3, "true");
+    }
+
+    #[test]
+    fn new_helpers_list() {
+        let (v, _, r) = run(
+            "l = uniq(split_list(\"a,b,a,c\", \",\"))\nret(join(sortlist(l), \"\"))",
+            HashMap::new(),
+        );
+        assert!(r.is_ok());
+        assert_eq!(v, "abc");
+        let (v3, _, r3) = run("ret(len(words(\"x y z\")))", HashMap::new());
+        assert!(r3.is_ok());
+        assert_eq!(v3, "3");
+        let (v4, _, r4) = run("ret(repeat(\"ab\", 3))", HashMap::new());
+        assert!(r4.is_ok());
+        assert_eq!(v4, "ababab");
     }
 }
