@@ -1,0 +1,18 @@
+name: cpu_topology
+version: 1.0.0
+desc: "CPU 拓扑诊断"
+url: plugins/cpu_topology.yml
+
+tools:
+    - id: threads
+      desc: "每核 vCPU 拓扑"
+      script: |
+        grep -E '^processor|^physical id|^core id' /proc/cpuinfo | head -60
+    - id: sockets
+      desc: "物理 CPU 数与核数"
+      script: |
+        nproc; grep -c '^physical id' /proc/cpuinfo; grep -c '^core id' /proc/cpuinfo
+    - id: cache
+      desc: "各核缓存大小"
+      script: |
+        lscpu 2>/dev/null | grep -iE 'Cache|Socket|Core|Thread' | head -20

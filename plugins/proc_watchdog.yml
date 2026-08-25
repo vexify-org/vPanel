@@ -1,0 +1,18 @@
+name: proc_watchdog
+version: 1.0.0
+desc: "进程存活与守护诊断"
+url: plugins/proc_watchdog.yml
+
+tools:
+    - id: top_uptime
+      desc: "存活最久的进程"
+      script: |
+        ps -eo pid,etimes,comm --sort=-etimes --no-headers 2>/dev/null | head -8
+    - id: restarts
+      desc: "重启最频繁进程"
+      script: |
+        ps -eo pid,etime,comm --no-headers 2>/dev/null | sort -k2 | head -8
+    - id: defunct
+      desc: "僵尸进程"
+      script: |
+        ps -eo pid,ppid,stat,comm --no-headers 2>/dev/null | awk '$3 ~ /Z/{print}' | head -10 || echo 无僵尸进程

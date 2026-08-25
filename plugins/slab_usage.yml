@@ -1,0 +1,18 @@
+name: slab_usage
+version: 1.0.0
+desc: "内核缓存(Slab)利用率诊断"
+url: plugins/slab_usage.yml
+
+tools:
+    - id: total
+      desc: "Slab 总量"
+      script: |
+        grep -E '^Slab|^SReclaimable|^SUnreclaim' /proc/meminfo
+    - id: shrink
+      desc: "可回收 slab"
+      script: |
+        cat /sys/kernel/slab/shrink_cache 2>/dev/null; echo 需root查看可回收量
+    - id: objs
+      desc: "对象数最多 slab"
+      script: |
+        cat /proc/slabinfo | awk 'NR>2{print $4, $1}' | sort -rn | head -10

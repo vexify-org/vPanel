@@ -1,0 +1,18 @@
+name: pkg_security
+version: 1.0.0
+desc: "软件包安全审计"
+url: plugins/pkg_security.yml
+
+tools:
+    - id: updates
+      desc: "可安全更新的包数"
+      script: |
+        apt list --upgradable 2>/dev/null | wc -l; dpkg --audit 2>/dev/null | head -10
+    - id: held
+      desc: "被锁定(hold)的包"
+      script: |
+        dpkg --get-selections 2>/dev/null | grep 'hold$' | head -20
+    - id: orphans
+      desc: "已失效/多余安装"
+      script: |
+        apt list --installed 2>/dev/null | wc -l | awk '{print "已安装包="$1}'

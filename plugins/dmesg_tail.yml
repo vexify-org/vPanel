@@ -1,0 +1,18 @@
+name: dmesg_tail
+version: 1.0.0
+desc: "内核日志实时诊断"
+url: plugins/dmesg_tail.yml
+
+tools:
+    - id: tail
+      desc: "内核日志最近20行"
+      script: |
+        dmesg 2>/dev/null | tail -20 || echo 需root
+    - id: errors
+      desc: "内核日志中的错误"
+      script: |
+        dmesg 2>/dev/null | grep -iE 'error|fail|bug|oops|panic' | tail -20 || echo 需root或无错误
+    - id: usb
+      desc: "内核日志 USB 事件"
+      script: |
+        dmesg 2>/dev/null | grep -i usb | tail -15 || echo 需root或无USB事件

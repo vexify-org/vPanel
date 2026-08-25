@@ -1,0 +1,18 @@
+name: page_stats
+version: 1.0.0
+desc: "内存页分配统计诊断"
+url: plugins/page_stats.yml
+
+tools:
+    - id: pages
+      desc: "页分配/释放"
+      script: |
+        grep -E 'pgalloc|pgfree|pgfault|pgmajfault' /proc/vmstat
+    - id: thp
+      desc: "透明大页统计"
+      script: |
+        grep -E 'thp_|_thp' /proc/vmstat 2>/dev/null | head -20 || echo 内核无thp统计
+    - id: buddy
+      desc: "伙伴系统各阶空闲页"
+      script: |
+        cat /proc/buddyinfo 2>/dev/null | head -10 || echo 需读权限

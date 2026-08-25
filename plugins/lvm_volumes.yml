@@ -1,0 +1,18 @@
+name: lvm_volumes
+version: 1.0.0
+desc: "LVM 逻辑卷诊断"
+url: plugins/lvm_volumes.yml
+
+tools:
+    - id: pvs
+      desc: "物理卷"
+      script: |
+        pvs 2>/dev/null || echo 未安装lvm2
+    - id: lvs
+      desc: "逻辑卷"
+      script: |
+        lvs 2>/dev/null || echo 未安装lvm2
+    - id: vg
+      desc: "卷组可用空间"
+      script: |
+        vgs 2>/dev/null || echo 未安装lvm2

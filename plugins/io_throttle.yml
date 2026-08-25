@@ -1,0 +1,18 @@
+name: io_throttle
+version: 1.0.0
+desc: "IO 节流/配额诊断"
+url: plugins/io_throttle.yml
+
+tools:
+    - id: blkio
+      desc: "cgroup 块IO节流"
+      script: |
+        cat /sys/fs/cgroup/io.max 2>/dev/null || echo 非cgroup v2 / 无限制
+    - id: io_stat
+      desc: "各磁盘读写"
+      script: |
+        iostat -d 2>/dev/null | head -20 || cat /proc/diskstats | head -20
+    - id: iops
+      desc: "各盘 IOPS"
+      script: |
+        grep -E 'sd[a-z] ' /proc/diskstats | awk '{print $3, "readIO="$4" writeIO="$8}'

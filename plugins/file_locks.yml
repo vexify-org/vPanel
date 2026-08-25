@@ -1,0 +1,18 @@
+name: file_locks
+version: 1.0.0
+desc: "文件锁诊断"
+url: plugins/file_locks.yml
+
+tools:
+    - id: flocks
+      desc: "活动文件锁"
+      script: |
+        cat /proc/locks 2>/dev/null | head -30
+    - id: by_proc
+      desc: "占用锁最多的进程"
+      script: |
+        cat /proc/locks 2>/dev/null | awk 'NR>1{print $NF}' | sort | uniq -c | sort -rn | head -10
+    - id: nfs_locks
+      desc: "NFS 相关锁"
+      script: |
+        cat /proc/locks 2>/dev/null | grep -i nfs | head -10

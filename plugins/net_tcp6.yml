@@ -1,0 +1,18 @@
+name: net_tcp6
+version: 1.0.0
+desc: "IPv6 TCP 连接诊断"
+url: plugins/net_tcp6.yml
+
+tools:
+    - id: conns6
+      desc: "列出 IPv6 TCP 活动连接"
+      script: |
+        ss -tan6 2>/dev/null | head -40
+    - id: listen6
+      desc: "列出 IPv6 TCP 监听端口"
+      script: |
+        ss -tanl6 2>/dev/null | awk 'NR>1{print $4, $6}' | sort -u | head -40
+    - id: wa6
+      desc: "IPv6 本机全局地址"
+      script: |
+        ip -6 addr show scope global 2>/dev/null | grep inet6

@@ -1,0 +1,18 @@
+name: service_security
+version: 1.0.0
+desc: "服务与端口暴露诊断"
+url: plugins/service_security.yml
+
+tools:
+    - id: open_ports
+      desc: "对外暴露端口"
+      script: |
+        ss -tlnp 2>/dev/null | awk '$4 !~ /127\./ && $4 !~ /::1/ {print $4}' | sort -u | head -30
+    - id: disabled_users
+      desc: "nologin 服务账户"
+      script: |
+        getent passwd | awk -F: '$7=="/usr/sbin/nologin" || $7=="/bin/false"' | wc -l
+    - id: web_dirs
+      desc: "Web 目录写权限风险"
+      script: |
+        ls -ld /var/www/* 2>/dev/null | head -10 || echo 无/var/www

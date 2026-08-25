@@ -1,0 +1,18 @@
+name: load_history
+version: 1.0.0
+desc: "负载与资源历史诊断"
+url: plugins/load_history.yml
+
+tools:
+    - id: loadavg
+      desc: "当前与历史负载"
+      script: |
+        cat /proc/loadavg
+    - id: sar_cpu
+      desc: "近30天CPU空闲率"
+      script: |
+        sar -u 2>/dev/null | tail -5 || echo 需sysstat
+    - id: daily
+      desc: "今日负载峰值"
+      script: |
+        sar -q 2>/dev/null | grep -vE '^$|Average|Linux' | tail -10 || echo 需sysstat

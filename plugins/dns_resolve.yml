@@ -1,0 +1,18 @@
+name: dns_resolve
+version: 1.0.0
+desc: "DNS 解析诊断"
+url: plugins/dns_resolve.yml
+
+tools:
+    - id: hosts
+      desc: "本地 /etc/hosts 映射"
+      script: |
+        cat /etc/hosts 2>/dev/null | grep -v '^#' | grep -v '^$'
+    - id: servers
+      desc: "当前 DNS 服务器与搜索域"
+      script: |
+        cat /etc/resolv.conf 2>/dev/null | grep -E 'nameserver|search'
+    - id: count
+      desc: "DNS 缓存/解析计数"
+      script: |
+        grep -c . /etc/hosts 2>/dev/null | awk '{print "hosts条目="$1}'

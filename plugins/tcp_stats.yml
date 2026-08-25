@@ -1,0 +1,18 @@
+name: tcp_stats
+version: 1.0.0
+desc: "TCP 协议栈统计"
+url: plugins/tcp_stats.yml
+
+tools:
+    - id: snmp
+      desc: "TCP 连接与收发统计"
+      script: |
+        cat /proc/net/snmp | awk '/^Tcp:/{getline; print "active="$3" passive="$4" in="$11" out="$12" retrans="$22}'
+    - id: abort
+      desc: "TCP 异常中止统计"
+      script: |
+        cat /proc/net/netstat | awk '/^TcpExt:/{getline; print "abort="$25" sync="$23}'
+    - id: keepalive
+      desc: "连接数与 keepalive 设置"
+      script: |
+        ss -tan | grep -c ESTAB; cat /proc/sys/net/ipv4/tcp_keepalive_time

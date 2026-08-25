@@ -1,0 +1,18 @@
+name: route_v6
+version: 1.0.0
+desc: "IPv6 路由诊断"
+url: plugins/route_v6.yml
+
+tools:
+    - id: routes
+      desc: "列出 IPv6 路由表"
+      script: |
+        ip -6 route show 2>/dev/null | head -40
+    - id: gateway
+      desc: "IPv6 默认网关"
+      script: |
+        ip -6 route show default 2>/dev/null
+    - id: kernel6
+      desc: "内核 IPv6 路由条目"
+      script: |
+        cat /proc/net/ipv6_route 2>/dev/null | head -30

@@ -1,0 +1,22 @@
+name: file_descs
+version: 1.0.0
+desc: "文件描述符诊断"
+url: plugins/file_descs.yml
+
+tools:
+    - id: proc_fd
+      desc: "fd 占用最多的进程: 参数 top"
+      script: |
+        t = arg("top")
+            if t == ""
+              t = "10"
+            end
+            ret(cmd("for p in /proc/[0-9]*; do n=$(ls $p/fd 2>/dev/null | wc -l); if [ \"$n\" -gt 0 ]; then echo \"$(basename $p) fds=$n\"; fi; done 2>/dev/null | sort -t= -k2 -rn | head -" + t))
+    - id: limit
+      desc: "系统 fd 上限"
+      script: |
+        cat /proc/sys/fs/file-max; cat /proc/sys/fs/nr_open
+    - id: cur
+      desc: "当前已用 fd"
+      script: |
+        cat /proc/sys/fs/file-nr

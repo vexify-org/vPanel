@@ -1,0 +1,18 @@
+name: tmpfs_usage
+version: 1.0.0
+desc: "内存文件系统(tmpfs)诊断"
+url: plugins/tmpfs_usage.yml
+
+tools:
+    - id: tmpfs
+      desc: "tmpfs 挂载与用量"
+      script: |
+        df -hT 2>/dev/null | grep -i tmpfs | head -15
+    - id: devshm
+      desc: "/dev/shm 用量"
+      script: |
+        df -h /dev/shm 2>/dev/null | tail -1
+    - id: shm_limit
+      desc: "各 tmpfs 限高"
+      script: |
+        mount 2>/dev/null | grep tmpfs | head -15

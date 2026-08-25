@@ -1,0 +1,18 @@
+name: pci_slots
+version: 1.0.0
+desc: "PCI 扩展槽/链路诊断"
+url: plugins/pci_slots.yml
+
+tools:
+    - id: link_width
+      desc: "PCIe 链路宽速"
+      script: |
+        lspci -vv 2>/dev/null | grep -E 'LnkSta|^[0-9]' | head -40 || echo 需pciutils
+    - id: errors
+      desc: "PCI 错误计数"
+      script: |
+        echo '需查看lspci -vv AER'; for e in /sys/bus/pci/devices/*/aer_dev_cor_err; do [ -e $e ] && echo "$e: $(cat $e)"; done 2>/dev/null | head -10
+    - id: bus_top
+      desc: "PCI 设备总线拓扑"
+      script: |
+        lspci -t 2>/dev/null | head -30 || echo 需pciutils

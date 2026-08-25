@@ -1,0 +1,18 @@
+name: cpu_cstates
+version: 1.0.0
+desc: "CPU 睡眠态(C-states)诊断"
+url: plugins/cpu_cstates.yml
+
+tools:
+    - id: states
+      desc: "各 C 状态停留次数"
+      script: |
+        grep -E '^C[0-9]' /sys/devices/system/cpu/cpu0/cpuidle/state*/name 2>/dev/null | head -30
+    - id: usage
+      desc: "各 C 状态使用时间"
+      script: |
+        cat /sys/devices/system/cpu/cpu0/cpuidle/state*/usage 2>/dev/null | paste -sd' ' | awk '{print "usage="$0}'
+    - id: latency
+      desc: "各 C 状态唤醒延迟"
+      script: |
+        for i in /sys/devices/system/cpu/cpu0/cpuidle/state*; do [ -e $i/latency ] && echo "$(basename $i) latency=$(cat $i/latency)"; done 2>/dev/null

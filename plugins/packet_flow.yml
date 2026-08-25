@@ -1,0 +1,18 @@
+name: packet_flow
+version: 1.0.0
+desc: "IP/ICMP 报文统计"
+url: plugins/packet_flow.yml
+
+tools:
+    - id: ip
+      desc: "IP 层收发与丢弃"
+      script: |
+        cat /proc/net/snmp | awk '/^Ip:/{getline; print "rx="$9" tx="$11" drop="$12" bad="$13}'
+    - id: icmp
+      desc: "ICMP 收发统计"
+      script: |
+        cat /proc/net/snmp | awk '/^Icmp:/{getline; print "in="$2" out="$11}'
+    - id: frag
+      desc: "IP 分片与重组统计"
+      script: |
+        cat /proc/net/snmp | awk '/^Ip:/{getline; print "reasm_ok="$25" reasm_fail="$26}'

@@ -1,0 +1,18 @@
+name: btrfs_files
+version: 1.0.0
+desc: "Btrfs 文件系统诊断"
+url: plugins/btrfs_files.yml
+
+tools:
+    - id: usage
+      desc: "Btrfs 文件系统用量"
+      script: |
+        btrfs filesystem usage / 2>/dev/null || btrfs filesystem df / 2>/dev/null || echo 非btrfs
+    - id: devices
+      desc: "Btrfs 设备列表"
+      script: |
+        btrfs filesystem show 2>/dev/null || echo 非btrfs
+    - id: scrub
+      desc: "Btrfs 校验状态"
+      script: |
+        btrfs scrub status / 2>/dev/null || echo 非btrfs

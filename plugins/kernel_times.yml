@@ -1,0 +1,18 @@
+name: kernel_times
+version: 1.0.0
+desc: "内核时间与定时器诊断"
+url: plugins/kernel_times.yml
+
+tools:
+    - id: hrtimer
+      desc: "高精度定时器信息"
+      script: |
+        cat /proc/timer_list 2>/dev/null | head -5 || echo 需要内核配置
+    - id: uptime
+      desc: "系统运行时长"
+      script: |
+        cat /proc/uptime
+    - id: clock
+      desc: "时钟源与跳变次数"
+      script: |
+        dmesg 2>/dev/null | grep -i 'clocksource' | tail -3 || cat /sys/devices/system/clocksource/clocksource*/current_clocksource 2>/dev/null

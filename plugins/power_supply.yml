@@ -1,0 +1,18 @@
+name: power_supply
+version: 1.0.0
+desc: "电源/电池状态诊断"
+url: plugins/power_supply.yml
+
+tools:
+    - id: supplies
+      desc: "电源设备概览"
+      script: |
+        for p in /sys/class/power_supply/*; do echo "$(basename $p): $(cat $p/type 2>/dev/null) status=$(cat $p/status 2>/dev/null)"; done 2>/dev/null
+    - id: ac
+      desc: "AC 电源状态"
+      script: |
+        cat /sys/class/power_supply/AC/online 2>/dev/null | awk '{print "AC在线="$1"(1在线)"}'
+    - id: battery
+      desc: "电池电量"
+      script: |
+        for p in /sys/class/power_supply/BAT*; do [ -e $p/capacity ] && echo "$(basename $p): $(cat $p/capacity)%%"; done 2>/dev/null || echo 无电池

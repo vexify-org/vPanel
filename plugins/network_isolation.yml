@@ -1,0 +1,18 @@
+name: network_isolation
+version: 1.0.0
+desc: "网络隔离与转发诊断"
+url: plugins/network_isolation.yml
+
+tools:
+    - id: forward
+      desc: "IP 转发是否开启"
+      script: |
+        cat /proc/sys/net/ipv4/ip_forward
+    - id: rpfilter
+      desc: "反向路径过滤"
+      script: |
+        cat /proc/sys/net/ipv4/conf/all/rp_filter
+    - id: promisc
+      desc: "混杂模式网卡"
+      script: |
+        grep -rl 'PROMISC' /sys/class/net/*/flags 2>/dev/null | sed 's/.*net\///' || echo 无混杂模式

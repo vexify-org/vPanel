@@ -1,0 +1,18 @@
+name: fs_io_stats
+version: 1.0.0
+desc: "文件系统 I/O 统计诊断"
+url: plugins/fs_io_stats.yml
+
+tools:
+    - id: request
+      desc: "各盘 I/O 请求队列"
+      script: |
+        cat /proc/diskstats 2>/dev/null | grep -E 'sd[a-z] |nvme[0-9]n' | head -20
+    - id: sectors
+      desc: "读写扇区数"
+      script: |
+        cat /proc/diskstats 2>/dev/null | grep -E 'sd[a-z] |nvme[0-9]n' | awk '{print $3, "read_sect="$6" write_sect="$10}'
+    - id: merged
+      desc: "合并IO统计"
+      script: |
+        cat /proc/diskstats 2>/dev/null | grep -E 'sd[a-z] |nvme[0-9]n' | awk '{print $3, "read_merge="$5" write_merge="$9}'

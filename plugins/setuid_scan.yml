@@ -1,0 +1,18 @@
+name: setuid_scan
+version: 1.0.0
+desc: "特权位(SUID)扫描"
+url: plugins/setuid_scan.yml
+
+tools:
+    - id: newsuid
+      desc: "近期新出现的 SUID 文件"
+      script: |
+        find / -xdev -type f -perm -4000 2>/dev/null -mtime -7 | head -20 || echo 需权限
+    - id: all_suid
+      desc: "全部 SUID 文件"
+      script: |
+        find / -xdev -type f -perm -4000 2>/dev/null | head -40 || echo 需权限
+    - id: diffsgid
+      desc: "SGID 文件"
+      script: |
+        find / -xdev -type f -perm -2000 2>/dev/null | grep -vE '/(var|usr|etc)/' | head -20

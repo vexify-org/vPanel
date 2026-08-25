@@ -1,0 +1,18 @@
+name: mtu_diag
+version: 1.0.0
+desc: "MTU 链路诊断"
+url: plugins/mtu_diag.yml
+
+tools:
+    - id: iface_mtu
+      desc: "各网卡 MTU 与链路状态"
+      script: |
+        ip -br link 2>/dev/null
+    - id: default_mtu
+      desc: "默认路由出接口 MTU"
+      script: |
+        cat /proc/net/route | awk '$1!="Iface"{print $1}' | head -1 | xargs -r -I{} cat /sys/class/net/**/mtu 2>/dev/null; cat $(ls /sys/class/net/*/mtu | head -1) 2>/dev/null
+    - id: routes
+      desc: "路由表与 MTU 对照"
+      script: |
+        ip -r route show 2>/dev/null | head -30

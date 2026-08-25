@@ -1,0 +1,18 @@
+name: cpu_freq_hw
+version: 1.0.0
+desc: "CPU 频率在线诊断"
+url: plugins/cpu_freq_hw.yml
+
+tools:
+    - id: scaling
+      desc: "各核当前/最大频率"
+      script: |
+        grep MHz /proc/cpuinfo | sed 's/^cpu MHz/cpu MHz/' | head -$(nproc)
+    - id: governor_all
+      desc: "各核调频策略"
+      script: |
+        for c in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo "$(basename $(dirname $c)): $(cat $c)"; done 2>/dev/null | sort -u
+    - id: thermal_throttle
+      desc: "频率受限计数器"
+      script: |
+        grep -A2 'ttm throttle' /proc/cpuinfo 2>/dev/null; grep -A2 'Throttle' /proc/cpuinfo 2>/dev/null

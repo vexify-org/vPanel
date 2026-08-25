@@ -1,0 +1,18 @@
+name: iommu_groups
+version: 1.0.0
+desc: "IOMMU/直通分组诊断"
+url: plugins/iommu_groups.yml
+
+tools:
+    - id: groups
+      desc: "IOMMU 分组与设备"
+      script: |
+        for g in /sys/kernel/iommu_groups/*; do echo -n "$(basename $g): "; for d in $g/devices/*; do echo -n "$(basename $d) "; done; echo; done 2>/dev/null | head -30 || echo 未启用IOMMU
+    - id: enabled
+      desc: "IOMMU 是否启用"
+      script: |
+        dmesg 2>/dev/null | grep -iE 'DMAR|IOMMU' | head -5 || echo 需root查看dmesg
+    - id: vfio
+      desc: "直通驱动使用"
+      script: |
+        lspci -nnk 2>/dev/null | grep -B1 -A1 'vfio-pci' | head -30 || echo 需pciutils

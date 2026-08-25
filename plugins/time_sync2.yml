@@ -1,0 +1,18 @@
+name: time_sync2
+version: 1.0.0
+desc: "时间同步诊断"
+url: plugins/time_sync2.yml
+
+tools:
+    - id: status
+      desc: "时间同步状态"
+      script: |
+        timedatectl 2>/dev/null | grep -iE 'synchronized|systime' || echo 非systemd
+    - id: offset
+      desc: "与 NTP 偏差"
+      script: |
+        chronyc tracking 2>/dev/null | head -6 || ntpq -p 2>/dev/null || echo 未装chrony/ntp
+    - id: sources
+      desc: "NTP 服务器"
+      script: |
+        chronyc sources 2>/dev/null | head -10 || grep -rhE '^server' /etc/chrony.conf /etc/ntp.conf 2>/dev/null | head -10

@@ -1,0 +1,18 @@
+name: memory_slab
+version: 1.0.0
+desc: "内核内存(Slab)诊断"
+url: plugins/memory_slab.yml
+
+tools:
+    - id: top_slab
+      desc: "Slab 占用前10"
+      script: |
+        cat /proc/slabinfo | awk 'NR>2{print $3, $1}' | sort -rn | head -10
+    - id: slab_total
+      desc: "Slab 总量与利用率"
+      script: |
+        grep -E '^slab' /proc/meminfo
+    - id: vmstat_paging
+      desc: "内存分页交换活动"
+      script: |
+        grep -E 'pgpgin|pgpgout|pgmajfault|pswpin|pswpout' /proc/vmstat

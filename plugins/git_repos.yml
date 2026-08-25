@@ -1,0 +1,18 @@
+name: git_repos
+version: 1.0.0
+desc: "Git 仓库状态扫描"
+url: plugins/git_repos.yml
+
+tools:
+    - id: dirty
+      desc: "存在未提交变更的仓库"
+      script: |
+        find / -maxdepth 3 -name .git -type d 2>/dev/null | head -10
+    - id: bare
+      desc: "裸仓库"
+      script: |
+        find / -maxdepth 4 -name '*.git' -type d 2>/dev/null | xargs -r -I{} sh -c 'test -e {}/HEAD && echo {}' 2>/dev/null | head -10
+    - id: config
+      desc: "Git 全局配置"
+      script: |
+        cat /root/.gitconfig /etc/gitconfig 2>/dev/null | head -20 || echo 无

@@ -1,0 +1,18 @@
+name: process_sched
+version: 1.0.0
+desc: "进程调度延迟诊断"
+url: plugins/process_sched.yml
+
+tools:
+    - id: loadavg
+      desc: "运行队列与负载"
+      script: |
+        cat /proc/loadavg
+    - id: rt_procs
+      desc: "实时调度进程"
+      script: |
+        ps -eo pid,comm,rtprio --no-headers 2>/dev/null | awk '$3!="-"{print}' | head -20 || echo 无实时进程
+    - id: nice_stats
+      desc: "各优先级进程数"
+      script: |
+        ps -eo nice --no-headers 2>/dev/null | sort -n | uniq -c | head -15

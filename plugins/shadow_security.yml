@@ -1,0 +1,18 @@
+name: shadow_security
+version: 1.0.0
+desc: "账户密码安全审计"
+url: plugins/shadow_security.yml
+
+tools:
+    - id: enabled
+      desc: "可登录账户列表"
+      script: |
+        getent passwd | awk -F: '$7!="/usr/sbin/nologin" && $7!="/bin/false" && $3>=1000{print $1, $3}'
+    - id: uid0
+      desc: "UID=0 账户"
+      script: |
+        getent passwd | awk -F: '$3==0{print $1}'
+    - id: hashes
+      desc: "密码哈希算法"
+      script: |
+        grep -v '^#' /etc/shadow 2>/dev/null | awk -F: '{split($2,a,"$"); print $1, (a[2]==""?"无密码":("$"".a[2]))}' | head -15 || echo 需root

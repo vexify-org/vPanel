@@ -1,0 +1,18 @@
+name: dmi_info
+version: 1.0.0
+desc: "硬件型号信息诊断"
+url: plugins/dmi_info.yml
+
+tools:
+    - id: board
+      desc: "主板/机型"
+      script: |
+        dmidecode -t baseboard -t system 2>/dev/null | grep -E 'Manufacturer|Product|Version|Serial' | head -12 || echo 需要root
+    - id: bios
+      desc: "BIOS 版本"
+      script: |
+        dmidecode -t bios 2>/dev/null | grep -E 'Vendor|Version|Date' | head -6 || echo 需要root
+    - id: memory
+      desc: "内存条信息"
+      script: |
+        dmidecode -t memory 2>/dev/null | grep -E 'Size:|Type:|Speed:|Rank:' | head -16 || echo 需要root

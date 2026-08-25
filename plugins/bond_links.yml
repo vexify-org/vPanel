@@ -1,0 +1,18 @@
+name: bond_links
+version: 1.0.0
+desc: "链路聚合诊断"
+url: plugins/bond_links.yml
+
+tools:
+    - id: bond
+      desc: "Bond 聚合链路状态"
+      script: |
+        for b in /proc/net/bonding/*; do if [ -f "$b" ]; then echo "== $(basename $b) =="; grep -E 'MII|Active|Link' "$b"; fi; done 2>/dev/null || echo 无bond
+    - id: vlan
+      desc: "VLAN 链路状态"
+      script: |
+        ip -br link show type vlan 2>/dev/null || echo 无VLAN
+    - id: team
+      desc: "Team 链路状态"
+      script: |
+        ip -br link show type team 2>/dev/null || echo 无team

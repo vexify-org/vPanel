@@ -1,0 +1,18 @@
+name: mount_audit
+version: 1.0.0
+desc: "挂载选项安全审计"
+url: plugins/mount_audit.yml
+
+tools:
+    - id: suidopts
+      desc: "含 suid 选项挂载"
+      script: |
+        mount 2>/dev/null | grep -iE '\(rw|suid' | grep -v 'no.*suid' | head -20
+    - id: devsuid
+      desc: "dev/suid 挂载点"
+      script: |
+        mount 2>/dev/null | grep -iE 'exec|suid' | grep -viE 'nosuid|noexec|proc|sysfs|cgroup' | head -20
+    - id: oversize
+      desc: "特殊文件系统挂载"
+      script: |
+        mount 2>/dev/null | grep -viE 'cgroup|proc|sysfs|tmpfs|devpts|securityfs|pstore|mqueue|configfs|debugfs|hugetlbfs' | head -30

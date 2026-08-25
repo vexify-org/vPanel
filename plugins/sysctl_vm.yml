@@ -1,0 +1,18 @@
+name: sysctl_vm
+version: 1.0.0
+desc: "内存/Swap 内核参数诊断"
+url: plugins/sysctl_vm.yml
+
+tools:
+    - id: overcommit
+      desc: "Overcommit 策略与比例"
+      script: |
+        cat /proc/sys/vm/overcommit_memory /proc/sys/vm/overcommit_ratio 2>/dev/null
+    - id: dirty
+      desc: "脏页回写阈值"
+      script: |
+        cat /proc/sys/vm/dirty_ratio /proc/sys/vm/dirty_background_ratio 2>/dev/null
+    - id: swapness
+      desc: "交换倾向与可用性相关"
+      script: |
+        cat /proc/sys/vm/swappiness 2>/dev/null | awk '{print "swappiness="$1}'

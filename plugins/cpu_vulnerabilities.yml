@@ -1,0 +1,18 @@
+name: cpu_vulnerabilities
+version: 1.0.0
+desc: "CPU 安全漏洞缓解诊断"
+url: plugins/cpu_vulnerabilities.yml
+
+tools:
+    - id: meltdown
+      desc: "Meltdown/Spectre 缓解状态"
+      script: |
+        grep . /sys/devices/system/cpu/vulnerabilities/* 2>/dev/null | head -20
+    - id: pcid
+      desc: "PCID/IKI 特性"
+      script: |
+        grep -oE '\(.*KPTI.*\)|pti|pcid' /proc/cpuinfo | head -1
+    - id: microcode
+      desc: "CPU 微码版本"
+      script: |
+        grep 'microcode' /proc/cpuinfo | head -1

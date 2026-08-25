@@ -1,0 +1,26 @@
+name: latency
+version: 1.0.0
+desc: "延迟与丢包诊断"
+url: plugins/latency.yml
+
+tools:
+    - id: ping
+      desc: "ping 给定主机: 参数 host、次数"
+      script: |
+        h = arg("host")
+            if h == ""
+              h = "223.5.5.5"
+            end
+            cnt = arg("count")
+            if cnt == ""
+              cnt = "4"
+            end
+            ret(cmd("ping -c " + cnt + " -W 2 " + h + " 2>&1 | tail -3"))
+    - id: dns_latency
+      desc: "常用 DNS 延迟对比"
+      script: |
+        for i in 223.5.5.5 114.114.114.114 8.8.8.8; do echo -n "$i: "; ping -c 1 -W 2 $i 2>/dev/null | grep -oE 'time=.*' | head -1 | awk -F= '{print $2"s"}'; done
+    - id: jitter
+      desc: "网络抖动估算"
+      script: |
+        ping -c 5 -i 0.2 223.5.5.5 2>/dev/null | tail -2

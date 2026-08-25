@@ -1,0 +1,18 @@
+name: mdraid_arrs
+version: 1.0.0
+desc: "软RAID(MD)阵列诊断"
+url: plugins/mdraid_arrs.yml
+
+tools:
+    - id: status
+      desc: "RAID 阵列状态"
+      script: |
+        cat /proc/mdstat 2>/dev/null | head -30 || echo 无软RAID
+    - id: parity
+      desc: "RAID 重建/一致性"
+      script: |
+        cat /proc/mdstat 2>/dev/null | grep -iE 'resync|recovery|check' || echo 无进行中任务
+    - id: devices
+      desc: "RAID 成员设备"
+      script: |
+        for md in /dev/md*; do [ -b "$md" ] && echo "== $md =="; mdadm --detail "$md" 2>/dev/null | grep -E 'State|active|Working|Rebuild' | head -5; done 2>/dev/null || echo 无

@@ -1,0 +1,18 @@
+name: disk_health
+version: 1.0.0
+desc: "磁盘健康监测"
+url: plugins/disk_health.yml
+
+tools:
+    - id: smart
+      desc: "SMART 健康状态"
+      script: |
+        smartctl -H -A /dev/sda 2>/dev/null | grep -E 'Result|Reallocat|Current_Pending|Offline' | head -12 || echo 需smartctl
+    - id: realloc
+      desc: "重映射扇区"
+      script: |
+        for d in $(ls /sys/block/sd? 2>/dev/null); do echo "$(basename $d): $(grep -c . $d/device/state 2>/dev/null)"; done 2>/dev/null
+    - id: dmesg_err
+      desc: "磁盘I/O错误"
+      script: |
+        dmesg 2>/dev/null | grep -iE 'ext4-fs error|I/O error|EIO' | tail -10 || echo 需root或无错误

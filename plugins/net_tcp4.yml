@@ -1,0 +1,18 @@
+name: net_tcp4
+version: 1.0.0
+desc: "IPv4 TCP 连接诊断"
+url: plugins/net_tcp4.yml
+
+tools:
+    - id: conns4
+      desc: "列出 IPv4 TCP 活动连接"
+      script: |
+        ss -tan4 2>/dev/null | head -40
+    - id: listen4
+      desc: "列出 IPv4 TCP 监听端口"
+      script: |
+        ss -tanl4 2>/dev/null | awk 'NR>1{print $4, $6}' | sort -u | head -40
+    - id: states4
+      desc: "按状态统计 IPv4 TCP 连接"
+      script: |
+        ss -tan4 2>/dev/null | awk 'NR>1{print $1}' | sort | uniq -c | sort -rn

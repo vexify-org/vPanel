@@ -1,0 +1,18 @@
+name: socket_buf
+version: 1.0.0
+desc: "Socket 收发缓冲诊断"
+url: plugins/socket_buf.yml
+
+tools:
+    - id: queues
+      desc: "各连接收发队列(Send-Q/Recv-Q)"
+      script: |
+        ss -tan 2>/dev/null | head -40
+    - id: topq
+      desc: "接收队列积压最多的连接"
+      script: |
+        ss -tan 2>/dev/null | awk 'NR>1 && $2 + 0 > 0 {print $2, $5, $6}' | sort -rn | head -15
+    - id: tcp_mem
+      desc: "TCP 内存压力档位与限制"
+      script: |
+        cat /proc/sys/net/ipv4/tcp_mem

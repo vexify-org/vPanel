@@ -1,0 +1,18 @@
+name: scsi_disk
+version: 1.0.0
+desc: "磁盘/SCSI设备诊断"
+url: plugins/scsi_disk.yml
+
+tools:
+    - id: scsi_dev
+      desc: "SCSI 设备列表"
+      script: |
+        lsscsi 2>/dev/null || cat /proc/scsi/scsi 2>/dev/null || echo 需lsscsi
+    - id: disk_model
+      desc: "磁盘型号/序列号"
+      script: |
+        for d in /sys/block/sd?; do echo "$(basename $d): $(cat $d/device/model 2>/dev/null) $(cat $d/device/vendor 2>/dev/null)"; done 2>/dev/null
+    - id: rotational
+      desc: "机械/固态判断"
+      script: |
+        for d in /sys/block/sd?; do echo "$(basename $d): rotational=$(cat $d/queue/rotational 2>/dev/null)"; done 2>/dev/null

@@ -1,0 +1,18 @@
+name: nfs_mounts
+version: 1.0.0
+desc: "NFS 挂载诊断"
+url: plugins/nfs_mounts.yml
+
+tools:
+    - id: exports
+      desc: "NFS 导出目录"
+      script: |
+        cat /etc/exports 2>/dev/null | grep -v '^#' | grep -v '^$' | head -20 || echo 无exports
+    - id: mounts
+      desc: "NFS 挂载点"
+      script: |
+        mount 2>/dev/null | grep -i nfs || echo 无NFS挂载
+    - id: stats
+      desc: "NFS 客户端统计"
+      script: |
+        cat /proc/self/mountstats 2>/dev/null | head -40 || echo 需要内核支持

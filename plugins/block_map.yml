@@ -1,0 +1,18 @@
+name: block_map
+version: 1.0.0
+desc: "块设备拓扑诊断"
+url: plugins/block_map.yml
+
+tools:
+    - id: disks
+      desc: "块设备概览"
+      script: |
+        lsblk 2>/dev/null | head -40 || cat /proc/partitions
+    - id: ra
+      desc: "各盘读提前量"
+      script: |
+        for d in /sys/block/sd?; do echo "$(basename $d): ra=$(cat $d/queue/read_ahead_kb 2>/dev/null)K"; done 2>/dev/null
+    - id: io_sched
+      desc: "各盘 I/O 调度器"
+      script: |
+        for d in /sys/block/sd?; do echo "$(basename $d): $(cat $d/queue/scheduler 2>/dev/null)"; done 2>/dev/null

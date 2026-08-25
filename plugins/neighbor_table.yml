@@ -1,0 +1,18 @@
+name: neighbor_table
+version: 1.0.0
+desc: "ARP/邻居表诊断"
+url: plugins/neighbor_table.yml
+
+tools:
+    - id: arp
+      desc: "ARP 邻居表"
+      script: |
+        ip neigh | grep -i ether | head -40
+    - id: ndp
+      desc: "IPv6 邻居表"
+      script: |
+        ip -6 neigh show 2>/dev/null | head -40
+    - id: anycast
+      desc: "任一状态的邻居(含INCOMPLETE)"
+      script: |
+        ip neigh 2>/dev/null | head -40

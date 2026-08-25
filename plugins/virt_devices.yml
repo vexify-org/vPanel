@@ -1,0 +1,18 @@
+name: virt_devices
+version: 1.0.0
+desc: "虚拟化/容器设备诊断"
+url: plugins/virt_devices.yml
+
+tools:
+    - id: virt_type
+      desc: "运行环境类型"
+      script: |
+        systemd-detect-virt 2>/dev/null || echo none
+    - id: cgroup
+      desc: "cgroup 版本"
+      script: |
+        ls /sys/fs/cgroup/cgroup.controllers 2>/dev/null | wc -c | awk '{print "cgroup v2(single-file)"}'; stat -fc %T /sys/fs/cgroup 2>/dev/null
+    - id: container
+      desc: "是否容器与容器引擎"
+      script: |
+        grep -sq control /proc/1/cgroup 2>/dev/null && echo 容器内 || echo 非容器; cat /proc/1/cgroup 2>/dev/null | head -3

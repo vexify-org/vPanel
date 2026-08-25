@@ -1,0 +1,18 @@
+name: interface_errs
+version: 1.0.0
+desc: "网卡错误/丢包深度诊断"
+url: plugins/interface_errs.yml
+
+tools:
+    - id: summary
+      desc: "各网卡收发错误/丢包"
+      script: |
+        ip -s link show 2>/dev/null | grep -E 'e[0-9]|w[0-9]|RX: bytes|TX: bytes|errors|dropped' | head -90
+    - id: rx_err
+      desc: "接收错误排名"
+      script: |
+        grep -v 'lo:' /proc/net/dev | awk 'NR>2{split($1,a,":"); if($4+0>0) print a[1], "rx_err="$4}'
+    - id: drop_all
+      desc: "收发包丢弃排名"
+      script: |
+        grep -v 'lo:' /proc/net/dev | awk 'NR>2{split($1,a,":"); print a[1], "rx_drop="$5" tx_drop="$13}'

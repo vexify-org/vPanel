@@ -1,0 +1,18 @@
+name: perf_top
+version: 1.0.0
+desc: "进程性能 TOP 诊断"
+url: plugins/perf_top.yml
+
+tools:
+    - id: cpu_top
+      desc: "CPU 占用前10"
+      script: |
+        ps -eo pid,comm,%cpu --sort=-%cpu --no-headers 2>/dev/null | head -10
+    - id: mem_top
+      desc: "内存占用前10"
+      script: |
+        ps -eo pid,comm,rss --sort=-rss --no-headers 2>/dev/null | head -10
+    - id: io_top
+      desc: "I/O 等待前5"
+      script: |
+        ps -eo pid,stat,comm --no-headers -o stat,comm 2>/dev/null | awk '$1 ~ /D/{print}' | head -5 || echo 无D状态进程

@@ -1,0 +1,28 @@
+name: http_probe
+version: 1.0.0
+desc: "HTTP/HTTPS 端点探活"
+url: plugins/http_probe.yml
+
+tools:
+    - id: local
+      desc: "本地 HTTP 探活"
+      script: |
+        curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://127.0.0.1 || echo 0
+    - id: status
+      desc: "探测 URL 状态码: 参数 url"
+      script: |
+        u = arg("url")
+            if u == ""
+              u = "http://127.0.0.1"
+            end
+            r = http_status(u)
+            ret("状态码: " + r)
+    - id: tlsdate
+      desc: "HTTPS 证书到期: 参数 host"
+      script: |
+        h = arg("host")
+            if h == ""
+              h = "example.com"
+            end
+            r = cmd("echo | openssl s_client -servername " + h + " -connect " + h + ":443 2>/dev/null | openssl x509 -noout -dates 2>/dev/null")
+            ret(trim(r))

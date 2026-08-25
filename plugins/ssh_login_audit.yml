@@ -1,0 +1,18 @@
+name: ssh_login_audit
+version: 1.0.0
+desc: "SSH 登录审计诊断"
+url: plugins/ssh_login_audit.yml
+
+tools:
+    - id: fail
+      desc: "失败登录分布(按IP)"
+      script: |
+        grep -h 'Failed password' /var/log/auth.log /var/log/secure 2>/dev/null | grep -oE 'from +[0-9.]+' | awk '{print $2}' | sort | uniq -c | sort -rn | head -15 || echo 无日志
+    - id: success
+      desc: "成功登录记录"
+      script: |
+        grep -h 'Accepted' /var/log/auth.log /var/log/secure 2>/dev/null | tail -10 || echo 无日志
+    - id: today
+      desc: "今日登录尝试"
+      script: |
+        grep -h '$(date +%b\ %d)' /var/log/auth.log /var/log/secure 2>/dev/null | wc -l | awk '{print "今日认证事件="$1}' || echo 无日志

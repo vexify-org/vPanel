@@ -1,0 +1,18 @@
+name: net_device
+version: 1.0.0
+desc: "网卡驱动与队列"
+url: plugins/net_device.yml
+
+tools:
+    - id: driver
+      desc: "各网卡驱动"
+      script: |
+        for i in /sys/class/net/*; do if [ -e "$i/device/driver" ]; then echo "$(basename $i): $(basename $(readlink $i/device/driver 2>/dev/null))"; fi; done 2>/dev/null
+    - id: queues
+      desc: "各网卡队列数"
+      script: |
+        for i in /sys/class/net/*; do q=$(ls $i/queues 2>/dev/null | wc -l); echo "$(basename $i): $q队列"; done 2>/dev/null
+    - id: speed
+      desc: "各网卡速率/双工"
+      script: |
+        for i in /sys/class/net/*; do if [ -e $i/speed ] && [ -e $i/duplex ]; then echo "$(basename $i): $(cat $i/speed)Mb/s $(cat $i/duplex)"; fi; done 2>/dev/null

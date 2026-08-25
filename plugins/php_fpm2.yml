@@ -1,0 +1,18 @@
+name: php_fpm2
+version: 1.0.0
+desc: "PHP-FPM 池诊断"
+url: plugins/php_fpm2.yml
+
+tools:
+    - id: status
+      desc: "PHP-FPM 运行池"
+      script: |
+        ps -eo cmd --no-headers 2>/dev/null | grep -i 'php-fpm' | head -3 || echo 未运行
+    - id: slow
+      desc: "慢日志检查"
+      script: |
+        find /var/log -name '*-slow.log' 2>/dev/null -exec tail -5 {} \; | head -15 || echo 无慢日志
+    - id: opcache
+      desc: "OPcache 状态"
+      script: |
+        php -i 2>/dev/null | grep -E 'opcache.enable|opcache.memory_consumption|opcache.interned' | head -5 || echo 需php-cli

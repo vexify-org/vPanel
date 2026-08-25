@@ -1,0 +1,18 @@
+name: conntrack
+version: 1.0.0
+desc: "连接跟踪诊断"
+url: plugins/conntrack.yml
+
+tools:
+    - id: count
+      desc: "当前已跟踪连接数"
+      script: |
+        cat /proc/sys/net/netfilter/nf_conntrack_count 2>/dev/null || echo 未启用nf_conntrack
+    - id: max
+      desc: "连接跟踪上限"
+      script: |
+        cat /proc/sys/net/netfilter/nf_conntrack_max 2>/dev/null || echo 未启用
+    - id: table
+      desc: "已跟踪连接明细"
+      script: |
+        cat /proc/net/nf_conntrack 2>/dev/null | head -30 || echo 未启用

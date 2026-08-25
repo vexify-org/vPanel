@@ -1,0 +1,18 @@
+name: cron_security
+version: 1.0.0
+desc: "定时任务安全审计"
+url: plugins/cron_security.yml
+
+tools:
+    - id: cron_all
+      desc: "系统定时任务"
+      script: |
+        crontab -l 2>/dev/null; ls /etc/cron.* 2>/dev/null | head -20 || echo 无cron
+    - id: perms
+      desc: "cron 目录权限"
+      script: |
+        ls -ld /etc/cron.* 2>/dev/null
+    - id: allow_deny
+      desc: "cron 黑白名单"
+      script: |
+        ls -l /etc/cron.allow /etc/cron.deny 2>/dev/null || echo 未限制(默认全允许)

@@ -1,0 +1,18 @@
+name: app_logs
+version: 1.0.0
+desc: "应用日志故障诊断"
+url: plugins/app_logs.yml
+
+tools:
+    - id: critical
+      desc: "各日志关键错误"
+      script: |
+        grep -rhE 'error|fatal|panic' /var/log/nginx/*.log /var/log/mysql/*.log /var/log/php* 2>/dev/null | tail -20 || echo 无错误日志
+    - id: disk_full
+      desc: "磁盘空间预警"
+      script: |
+        df -h | awk '$5+0>85 {print $1, $5}' && echo --- || echo 无超85%分区
+    - id: recent
+      desc: "最近修改日志"
+      script: |
+        find /var/log -type f -mmin -30 2>/dev/null | head -10 | xargs -r ls -lh 2>/dev/null

@@ -1,0 +1,18 @@
+name: kernel_workers
+version: 1.0.0
+desc: "内核工作队列诊断"
+url: plugins/kernel_workers.yml
+
+tools:
+    - id: workqueue
+      desc: "工作队列概览"
+      script: |
+        cat /proc/workqueue 2>/dev/null | head -20 || echo 内核未开放
+    - id: kthreads
+      desc: "内核线程数"
+      script: |
+        ps -eo comm --no-headers 2>/dev/null | grep -c '^k' | awk '{print "k*内核线程="$1}'
+    - id: softlock
+      desc: "软锁检测状态"
+      script: |
+        cat /proc/sys/kernel/watchdog 2>/dev/null | awk '{print "watchdog="$1}'

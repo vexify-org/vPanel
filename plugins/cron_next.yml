@@ -1,0 +1,18 @@
+name: cron_next
+version: 1.0.0
+desc: "计划任务下一次执行诊断"
+url: plugins/cron_next.yml
+
+tools:
+    - id: at
+      desc: "at 一次性任务"
+      script: |
+        atq 2>/dev/null | head -10 || echo 无at任务
+    - id: systemd_timers
+      desc: "systemd 定时器下次时间"
+      script: |
+        systemctl list-timers --no-legend 2>/dev/null | head -12 || echo 非systemd
+    - id: cron_syntax
+      desc: "cron 语法问题检查"
+      script: |
+        cat /etc/crontab 2>/dev/null | grep -vE '^#|^$' | head -15

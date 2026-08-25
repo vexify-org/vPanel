@@ -1,0 +1,18 @@
+name: rotate_logs
+version: 1.0.0
+desc: "日志轮转诊断"
+url: plugins/rotate_logs.yml
+
+tools:
+    - id: logrotate_cfg
+      desc: "logrotate 配置概览"
+      script: |
+        grep -rh '^[a-zA-Z0-9_/]' /etc/logrotate.d/ 2>/dev/null | grep -v '^{' | head -30 || echo 无配置
+    - id: state
+      desc: "logrotate 状态"
+      script: |
+        cat /var/lib/logrotate.status 2>/dev/null | head -20 || echo 无状态文件
+    - id: oversized
+      desc: "超大日志文件"
+      script: |
+        find /var/log -type f -size +200M 2>/dev/null | head -15

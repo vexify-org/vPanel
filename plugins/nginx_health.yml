@@ -1,0 +1,18 @@
+name: nginx_health
+version: 1.0.0
+desc: "Nginx 运行时诊断"
+url: plugins/nginx_health.yml
+
+tools:
+    - id: master
+      desc: "Nginx 主进程状态"
+      script: |
+        ps -eo pid,comm,%cpu --sort=-%cpu --no-headers 2>/dev/null | grep -i nginx | head -3 || echo 未运行
+    - id: conns
+      desc: "Nginx 活动连接"
+      script: |
+        grep -E 'Active connections|Reading|Writing|Waiting' /var/log/nginx/access.log 2>/dev/null | tail -5; ss -tan 2>/dev/null | grep -c :80 2>/dev/null | awk '{print "80端口连接="$1}'
+    - id: conf
+      desc: "配置语法检查"
+      script: |
+        nginx -t 2>&1 | head -5 || echo 需nginx

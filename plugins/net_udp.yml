@@ -1,0 +1,18 @@
+name: net_udp
+version: 1.0.0
+desc: "UDP 连接与统计诊断"
+url: plugins/net_udp.yml
+
+tools:
+    - id: conns
+      desc: "列出 UDP 连接"
+      script: |
+        ss -uan 2>/dev/null | head -40
+    - id: listeners
+      desc: "列出 UDP 监听端口"
+      script: |
+        ss -uanl 2>/dev/null | awk 'NR>1{print $4, $5}' | sort -u | head -40
+    - id: rxdrop
+      desc: "UDP 收发与丢包统计"
+      script: |
+        cat /proc/net/snmp | awk '/^Udp:/{print; getline; print}'

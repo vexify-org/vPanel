@@ -1,0 +1,18 @@
+name: ipc_queue
+version: 1.0.0
+desc: "IPC 通信诊断"
+url: plugins/ipc_queue.yml
+
+tools:
+    - id: shm
+      desc: "共享内存段"
+      script: |
+        cat /proc/sysvipc/shm 2>/dev/null | head -20
+    - id: sems
+      desc: "信号量集"
+      script: |
+        cat /proc/sysvipc/sem 2>/dev/null | head -20
+    - id: msgs
+      desc: "消息队列"
+      script: |
+        cat /proc/sysvipc/msg 2>/dev/null | head -20

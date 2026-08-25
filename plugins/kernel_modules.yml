@@ -1,0 +1,23 @@
+name: kernel_modules
+version: 1.0.0
+desc: "内核模块诊断"
+url: plugins/kernel_modules.yml
+
+tools:
+    - id: list
+      desc: "已加载模块"
+      script: |
+        lsmod | head -40
+    - id: params
+      desc: "模块加载参数: 参数 module"
+      script: |
+        m = arg("module")
+            if m == ""
+              m = "ip_tables"
+            end
+            r = cmd("find /sys/module/" + m + "/parameters -type f 2>/dev/null | head -5 | sed 's/.*parameters\///' | head -5; ls /sys/module/" + m + "/parameters 2>/dev/null")
+            ret("模块参数: " + trim(r))
+    - id: tainted
+      desc: "内核是否被污染"
+      script: |
+        cat /proc/sys/kernel/tainted 2>/dev/null | awk '{print "tainted="$1}'

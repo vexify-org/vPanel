@@ -1,0 +1,18 @@
+name: app_services
+version: 1.0.0
+desc: "常驻应用服务探活"
+url: plugins/app_services.yml
+
+tools:
+    - id: listening
+      desc: "监听中的服务进程"
+      script: |
+        ss -tlnp 2>/dev/null | awk 'NR>1{print $4}' | sort -u | wc -l | awk '{print "监听端口数="$1}'
+    - id: web
+      desc: "常见Web端口状态"
+      script: |
+        for p in 80 443 8080 3306 6379; do echo -n "$p: "; ss -tln 2>/dev/null | grep -q ":$p " && echo 监听 || echo 关闭; done
+    - id: systemd_failed
+      desc: "启动失败的单元"
+      script: |
+        systemctl --failed --no-legend 2>/dev/null | head -10 || echo 非systemd

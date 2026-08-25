@@ -1,0 +1,18 @@
+name: irq_count
+version: 1.0.0
+desc: "中断计数诊断"
+url: plugins/irq_count.yml
+
+tools:
+    - id: top_irq
+      desc: "触发最多中断"
+      script: |
+        awk 'NR>1{sum=0; for(i=2;i<=NF;i++) sum+=$i; print sum, $1}' /proc/interrupts | sort -rn | head -12
+    - id: by_cpu
+      desc: "中断在各 CPU 分布"
+      script: |
+        cat /proc/interrupts | head -15
+    - id: name
+      desc: "中断名映射"
+      script: |
+        grep -E '^[0-9]+:' /proc/interrupts | awk '{print $1, $NF}' | head -20

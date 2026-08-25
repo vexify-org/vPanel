@@ -1,0 +1,18 @@
+name: vmstat_dash
+version: 1.0.0
+desc: "系统健康仪表盘"
+url: plugins/vmstat_dash.yml
+
+tools:
+    - id: vmstat
+      desc: "系统资源瞬时状态"
+      script: |
+        vmstat 1 2 2>/dev/null | tail -1 || cat /proc/meminfo | head -5
+    - id: swap
+      desc: "交换使用"
+      script: |
+        free -h 2>/dev/null | head -2 | tail -1
+    - id: io
+      desc: "IO 等待占比"
+      script: |
+        vmstat 1 2 2>/dev/null | tail -1 | awk '{print "wa="$16"%"}'

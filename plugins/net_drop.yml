@@ -1,0 +1,18 @@
+name: net_drop
+version: 1.0.0
+desc: "网卡丢弃排名"
+url: plugins/net_drop.yml
+
+tools:
+    - id: rx
+      desc: "接收丢弃排名"
+      script: |
+        grep -v 'lo:' /proc/net/dev | awk 'NR>2{split($1,a,":"); print a[1], "rx_drop="$5}' | sort -k2 -t= -rn | head -10
+    - id: tx
+      desc: "发送丢弃排名"
+      script: |
+        grep -v 'lo:' /proc/net/dev | awk 'NR>2{split($1,a,":"); print a[1], "tx_drop="$13}' | sort -k2 -t= -rn | head -10
+    - id: total
+      desc: "所有网卡收发字节/包"
+      script: |
+        cat /proc/net/dev | grep -v 'lo:' | awk 'NR>2{split($1,a,":"); printf "%s rx=%sB tx=%sB pkts=%s\n", a[1], $2, $11, $3}'

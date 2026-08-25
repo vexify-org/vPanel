@@ -1,0 +1,18 @@
+name: sysctl_net
+version: 1.0.0
+desc: "网络内核参数诊断"
+url: plugins/sysctl_net.yml
+
+tools:
+    - id: tcp_tuning
+      desc: "TCP 收发缓冲区间"
+      script: |
+        cat /proc/sys/net/core/rmem_max /proc/sys/net/core/wmem_max 2>/dev/null
+    - id: inotify
+      desc: "文件监视上限"
+      script: |
+        cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null | awk '{print "max_user_watches="$1}'
+    - id: sockets_max
+      desc: "进程资源-打开文件上限"
+      script: |
+        ulimit -n

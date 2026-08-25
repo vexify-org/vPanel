@@ -1,0 +1,18 @@
+name: apt_mirror
+version: 1.0.0
+desc: "包源镜像可达性诊断"
+url: plugins/apt_mirror.yml
+
+tools:
+    - id: sources
+      desc: "APT 源列表"
+      script: |
+        grep -rhE '^deb ' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | head -20 || echo 非debian系
+    - id: check
+      desc: "APT 更新检查"
+      script: |
+        apt-get update -o Acquire::http::Timeout=2 2>&1 | tail -5 || echo 无网络/未配置
+    - id: upgradable
+      desc: "可升级包概览"
+      script: |
+        apt-get -s upgrade 2>/dev/null | grep -cE '^Inst ' | awk '{print "可升级="$1}'

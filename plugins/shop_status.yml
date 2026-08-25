@@ -1,0 +1,18 @@
+name: shop_status
+version: 1.0.0
+desc: "面板商店与更新诊断"
+url: plugins/shop_status.yml
+
+tools:
+    - id: store
+      desc: "商店清单可达性"
+      script: |
+        curl -s -o /dev/null -w '%{http_code}' --max-time 8 https://raw.githubusercontent.com 2>/dev/null || echo 0
+    - id: store_health
+      desc: "软件源连通性"
+      script: |
+        grep -rhE '^deb ' /etc/apt/sources.list* 2>/dev/null | head -3 | awk '{print $2}' | while read m; do echo -n "$m: "; curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$m" 2>/dev/null; echo; done | head -5
+    - id: panel_ver
+      desc: "面板版本与仓库"
+      script: |
+        head -30 Cargo.toml 2>/dev/null | grep -E '^name|^version' | head -2

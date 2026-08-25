@@ -1,0 +1,18 @@
+name: numa_topology
+version: 1.0.0
+desc: "NUMA 拓扑诊断"
+url: plugins/numa_topology.yml
+
+tools:
+    - id: nodes
+      desc: "NUMA 节点内存分布"
+      script: |
+        numactl --hardware 2>/dev/null || cat /sys/devices/system/node/node*/meminfo 2>/dev/null | grep 'MemTotal' | head -10
+    - id: membind
+      desc: "当前进程 NUMA 绑定"
+      script: |
+        numactl --show 2>/dev/null || echo 需numactl
+    - id: zoneinfo
+      desc: "各节点内存区域"
+      script: |
+        grep -E '^Node|normal|DMA' /proc/zoneinfo 2>/dev/null | head -40
