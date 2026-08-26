@@ -478,7 +478,7 @@ function loadTk(){fetch('/api/tasks').then(function(r){return r.json()}).then(fu
 })}
 function tkAdd(e){e.preventDefault();var sch=e.target.schedule.value.trim(),cmd=e.target.command.value.trim();if(!sch||!cmd)return;post('/api/tasks/add',{schedule:sch,command:cmd},function(res){toast(res.msg||'已添加');loadTk()})}
 
-function post(path,fields,cb){var fd=new FormData();for(var k in fields)fd.append(k,fields[k]);fetch(path,{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(res){if(cb)cb(res);if(res&&res.ok===false&&!cb)toast(res.msg||'操作失败')})}
+function post(path,fields,cb){var b=Object.keys(fields).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(fields[k])}).join('&');fetch(path,{method:'POST',body:b,headers:{'Content-Type':'application/x-www-form-urlencoded'}}).then(function(r){return r.json()}).then(function(res){if(cb)cb(res);if(res&&res.ok===false&&!cb)toast(res.msg||'操作失败')})}
 
 function loadShop(){fetch('/api/shop').then(function(r){return r.json()}).then(function(d){
   if(!d.ok){$('view').innerHTML='<div class="card" style="padding:30px;text-align:center"><div style="font-weight:700;margin-bottom:8px">软件商店 · 清单拉取失败</div><div class="muted">'+esc(d.msg||'未知错误')+'</div><div style="margin-top:16px"><button class="pri" onclick="loadShop()">重试</button></div></div>';return}
