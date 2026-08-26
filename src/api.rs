@@ -13,7 +13,7 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
         "/api/system" => crate::system::system_json(&state.monitor),
         "/api/processes" => crate::system::processes_json(),
         "/api/services" => crate::ctl::services_json(),
-        "/api/firewall" => crate::ctl::firewall_json(),
+        "/api/firewall" => crate::firewall::rules_json(),
         "/api/tasks" => crate::ctl::tasks_json(),
         "/api/plugins" => state.plugins.list_json(),
         "/api/plugin/kv" => state.plugins.kv_list_json(),
@@ -441,20 +441,30 @@ fn action_route(target: &str, body: &[u8], _qs: &str) -> String {
             ok_bool(ok, msg)
         }
         "/api/firewall/add" => {
+            let action = json::form_get(&fields, "action").unwrap_or("allow").trim().to_string();
             let port = json::form_get(&fields, "port").unwrap_or("").trim().to_string();
-            if port.is_empty() {
-                return err("缺少 port");
-            }
-            let (ok, msg) = crate::ctl::fw_allow(&port);
-            ok_bool(ok, msg)
+            let proto = json::form_get(&fields, "proto").unwrap_or("tcp").trim().to_string();
+            let ip = json::form_get(&fields, "ip").unwrap_or("").trim().to_string();
+            let r = crate::firewall::add(&action, &port, &proto, &ip);
+            ok_bool(r.0, r.1)
         }
         "/api/firewall/del" => {
-            let port = json::form_get(&fields, "port").unwrap_or("").trim().to_string();
-            if port.is_empty() {
-                return err("缺少 port");
-            }
-            let (ok, msg) = crate::ctl::fw_delete(&port);
-            ok_bool(ok, msg)
+            let id = json::form_get(&fields, "id").unwrap_or("").trim().to_string();
+            let r = if id.is_empty() {
+                let port = json::form_get(&fields, "port").unwrap_or("").trim().to_string();
+                crate::firewall::del_by_port(&port)
+            } else {
+                crate::firewall::del(&id)
+            };
+            ok_bool(r.0, r.1)
+        }
+        "/api/firewall/enable" => {
+            let r = crate::firewall::set_enabled(true);
+            ok_bool(r.0, r.1)
+        }
+        "/api/firewall/disable" => {
+            let r = crate::firewall::set_enabled(false);
+            ok_bool(r.0, r.1)
         }
         "/api/tasks/add" => {
             let schedule = json::form_get(&fields, "schedule").unwrap_or("").trim().to_string();

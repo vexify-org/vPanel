@@ -421,14 +421,25 @@ function miniAct(t,c,n,a){return '<button class="mini '+c+'" onclick="svAct(\''+
 function svAct(n,a){post('/api/service/action',{name:n,action:a},function(res){toast(res.msg||('已'+a+' '+n));loadSv()})}
 
 function loadFw(){fetch('/api/firewall').then(function(r){return r.json()}).then(function(d){
-  var h='<form class="rowform" onsubmit="fwAdd(event)"><input name="port" placeholder="端口 或 端口/协议(tcp/udp)，如 8080" required style="min-width:260px;flex:1"><button class="pri" type="submit">+ 放行端口</button></form>';
-  h+='<div class="card"><table><tr><th>端口/协议</th><th>动作</th><th></th></tr>';
-  (d.list||[]).forEach(function(f){h+='<tr><td>'+esc(f.port)+'</td><td><span class="cool">'+esc(f.action)+'</span></td><td style="text-align:right"><button class="mini danger" onclick="fwDel(\''+esc(f.port)+'\')">删除</button></td></tr>'});
-  h+='</table>'+muted((d.list||[]).length+' 条放行规则 (ufw)')+'</div>';
+  var on=d.enabled;
+  var h='<div class="toolbar"><span class="muted" style="align-self:center">后端: <code>'+esc(d.backend||'none')+'</code> · 状态: <b>'+(on?'启用':'停用')+'</b></span>';
+  h+=(on?'<button class="mini danger" onclick="fwEnable(false)">停用防火墙</button>':'<button class="mini ok" onclick="fwEnable(true)">启用防火墙</button>')+'</div>';
+  h+='<form class="rowform" onsubmit="fwAdd(event)"><select name="action"><option value="allow">放行</option><option value="deny">拒绝</option></select>';
+  h+='<select name="proto"><option value="tcp">TCP</option><option value="udp">UDP</option><option value="both">TCP/UDP</option></select>';
+  h+='<input name="port" placeholder="端口(留空=全部)，如 8080 或 8080-9090" style="flex:1;min-width:130px">';
+  h+='<input name="ip" placeholder="来源 IP/网段(留空=任意)，如 1.2.3.0/24" style="flex:1;min-width:150px">';
+  h+='<button class="pri" type="submit">+ 添加规则</button></form>';
+  h+='<div class="card"><table><tr><th>#</th><th>动作</th><th>端口</th><th>协议</th><th>来源</th><th></th></tr>';
+  (d.list||[]).forEach(function(f){
+    var act=f.action==='deny'?'<span style="color:#dc2626;font-weight:600">拒绝</span>':'<span style="color:#16a34a;font-weight:600">放行</span>';
+    h+='<tr><td>'+f.id+'</td><td>'+act+'</td><td><code>'+esc(f.port||'全部')+'</code></td><td>'+esc(f.proto||'tcp')+'</td><td>'+esc(f.ip||'任意')+'</td><td style="text-align:right"><button class="mini danger" onclick="fwDel('+f.id+')">删除</button></td></tr>';
+  });
+  h+='</table>'+muted((d.list||[]).length+' 条规则 · 自研独立链(nft/iptables)，不依赖 ufw')+'</div>';
   $('view').innerHTML=h;
 })}
-function fwAdd(e){e.preventDefault();var p=e.target.port.value.trim();if(!p)return;post('/api/firewall/add',{port:p},function(res){toast(res.msg||'已放行 '+p);loadFw()})}
-function fwDel(p){if(!confirm('删除放行规则 '+p+' ?'))return;post('/api/firewall/del',{port:p},function(res){toast(res.msg||'已删除');loadFw()})}
+function fwAdd(e){e.preventDefault();post('/api/firewall/add',{action:e.target.action.value,proto:e.target.proto.value,port:e.target.port.value,ip:e.target.ip.value},function(res){toast(res.msg||'已添加');loadFw()})}
+function fwDel(id){if(!confirm('删除规则 #'+id+' ?'))return;post('/api/firewall/del',{id:id},function(res){toast(res.msg||'已删除');loadFw()})}
+function fwEnable(on){post(on?'/api/firewall/enable':'/api/firewall/disable',{},function(res){toast(res.msg||(on?'已启用':'已停用'));loadFw()})}
 
 function loadTk(){fetch('/api/tasks').then(function(r){return r.json()}).then(function(d){
   var h='<form class="rowform" onsubmit="tkAdd(event)"><input name="schedule" placeholder="cron 5 段，如 0 2 * * *" required style="width:220px"><input name="command" placeholder="执行命令，如 bash /opt/backup.sh" required style="flex:1;min-width:220px"><button class="pri" type="submit">+ 添加任务</button></form>';

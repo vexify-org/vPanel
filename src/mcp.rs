@@ -1097,17 +1097,11 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
         "system_overview" => (true, crate::system::system_json(&state.monitor)),
         "list_processes" => (true, crate::system::processes_json()),
         "list_services" => (true, crate::ctl::services_json()),
-        "list_firewall" => (true, crate::ctl::firewall_json()),
+        "list_firewall" => (true, crate::firewall::rules_json()),
         "list_tasks" => (true, crate::ctl::tasks_json()),
         "service_action" => crate::ctl::service_action(&svc_name, &action),
-        "firewall_add" => {
-            let (o, m) = crate::ctl::fw_allow(&port);
-            (o, m)
-        }
-        "firewall_del" => {
-            let (o, m) = crate::ctl::fw_delete(&port);
-            (o, m)
-        }
+        "firewall_add" => crate::firewall::add("allow", &port, "tcp", ""),
+        "firewall_del" => crate::firewall::del_by_port(&port),
         "task_add" => {
             let (o, m) = crate::ctl::task_add(&schedule, &command);
             (o, m)

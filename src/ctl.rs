@@ -4,8 +4,6 @@
 
 use crate::json;
 
-const UFW: &str = "/usr/sbin/ufw";
-
 /// 服务列表 -> JSON 字符串。
 pub fn services_json() -> String {
     let out = json::run_out("systemctl", &["list-units", "--type=service", "--all", "--no-legend", "--no-pager"]);
@@ -47,78 +45,6 @@ pub fn service_action(name: &str, action: &str) -> (bool, String) {
             (o.status.success(), err)
         }
         Err(e) => (false, e.to_string()),
-    }
-}
-
-/// 防火墙规则列表 -> JSON 字符串。
-pub fn firewall_json() -> String {
-    let out = json::run_out(UFW, &["status", "numbered"]);
-    let mut rules = String::from("[");
-    let mut first = true;
-    if let Some(s) = out {
-        for line in s.lines() {
-            // 形如："[ 1] 22/tcp                    ALLOW IN    Anywhere"
-            let t = line.trim();
-            if t.contains("ALLOW") {
-                if let Some(port) = find_port(t) {
-                    if !first {
-                        rules.push(',');
-                    }
-                    first = false;
-                    rules.push_str(&format!(
-                        "{{\"port\":\"{}\",\"action\":\"ALLOW\"}}",
-                        json::jesc(&port)
-                    ));
-                }
-            }
-        }
-    }
-    rules.push(']');
-    let comma_count = rules.matches(',').count() as i64;
-    let comma_parts = if comma_count == 0 { 0 } else { comma_count + 1 };
-    format!("{{\"len\":{},\"list\":{}}}", comma_parts, rules)
-}
-
-/// 从 ufw 行中取出 port/proto，如 "8080/tcp"。
-fn find_port(line: &str) -> Option<String> {
-    for tok in line.split_whitespace() {
-        if tok.contains('/') && tok.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
-            return Some(tok.to_string());
-        }
-        // 纯数字端口
-        if tok.chars().all(|c| c.is_ascii_digit()) && !tok.is_empty() {
-            return Some(tok.to_string());
-        }
-    }
-    None
-}
-
-/// 放行端口。
-pub fn fw_allow(port: &str) -> (bool, String) {
-    let spec = norm_port(port);
-    let out = std::process::Command::new(UFW).args(["allow", &spec]).output();
-    cmd_result(out)
-}
-
-/// 删除端口放行。
-pub fn fw_delete(port: &str) -> (bool, String) {
-    let spec = norm_port(port);
-    let out = std::process::Command::new(UFW)
-        .args(["delete", "allow", &spec])
-        .output();
-    cmd_result(out)
-}
-
-/// 把 "8080" 归一为 "8080/tcp"；若已带协议则原样返回。
-fn norm_port(port: &str) -> String {
-    let p = port.trim();
-    if p.is_empty() {
-        return String::new();
-    }
-    if p.contains('/') {
-        p.to_string()
-    } else {
-        format!("{}/tcp", p)
     }
 }
 
