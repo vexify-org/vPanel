@@ -60,6 +60,23 @@ pub struct State {
 /// 启动监听并派发工作线程。阻塞运行，直到进程退出。
 pub fn serve(cfg: Config) -> std::io::Result<()> {
     let monitor = crate::system::Monitor::start();
+    // 后台告警检测线程：定期检查资源阈值，超限则发邮件。低栈低耗。
+    {
+        let m = monitor.clone();
+        std::thread::Builder::new()
+            .stack_size(192 * 1024)
+            .name("alert".into())
+            .spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_secs(12));
+                let (_fire, msg) = crate::alert::check(&m);
+                // 仅在真正触发或有错误时打印，避免刷屏。
+                if !msg.starts_with("未开启") && !msg.starts_with("各项") && !msg.starts_with("冷却") {
+                    if _fire {
+                        eprintln!("panel: 资源告警 {}", msg);
+                    }
+                }
+            });
+    }
     let shop = crate::shop::Shop::new();
     let plugins = crate::plugins::Plugins::new();
     plugins.load(&cfg); // 从 plugins 目录加载插件 + 启动定时线程

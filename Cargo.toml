@@ -11,10 +11,10 @@ path = "src/main.rs"
 [features]
 # 默认精简构建：内链 Web 终端（portable-pty），TLS 保持可选。
 # 需要 HTTPS 时再加：
-#   cargo build --release --features tls        # 内置 HTTPS
+#   cargo build --release --features tls        # 内置 HTTPS + 加密 SMTP 邮件告警
 #   cargo build --release --features tls,terminal # TLS + 终端（全功能）
 default = ["terminal"]
-tls = ["dep:rustls", "dep:rustls-pemfile", "dep:rcgen"]
+tls = ["dep:rustls", "dep:rustls-pemfile", "dep:rcgen", "dep:webpki-roots"]
 terminal = ["dep:portable-pty"]
 
 [dependencies]
@@ -33,6 +33,8 @@ sha2 = "0.10"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"], optional = true }
 rustls-pemfile = { version = "2", optional = true }
 rcgen = { version = "0.13", default-features = false, features = ["ring"], optional = true }
+# 内置根证书，供 SMTP 邮件的 STARTTLS / SMTPS 校验服务器证书（tls 特性下启用）。
+webpki-roots = { version = "0.26", optional = true }
 
 [profile.release]
 # 尽力把二进制和常驻内存压到最小

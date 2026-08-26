@@ -14,6 +14,7 @@ pub fn route(method: &str, target: &str, body: &[u8], state: &State) -> Vec<u8> 
         "/api/processes" => crate::system::processes_json(),
         "/api/services" => crate::ctl::services_json(),
         "/api/firewall" => crate::firewall::rules_json(),
+        "/api/alert" => crate::alert::status_json(&state.monitor),
         "/api/tasks" => crate::ctl::tasks_json(),
         "/api/plugins" => state.plugins.list_json(),
         "/api/plugin/kv" => state.plugins.kv_list_json(),
@@ -466,6 +467,28 @@ fn action_route(target: &str, body: &[u8], _qs: &str) -> String {
             let r = crate::firewall::set_enabled(false);
             ok_bool(r.0, r.1)
         }
+        "/api/alert/save" => {
+            let f = |k: &str, d: &str| json::form_get(&fields, k).unwrap_or(d).trim().to_string();
+            let fv = |k: &str, d: &str| f(k, d);
+            let (ok, msg) = crate::alert::save_cfg(
+                &fv("smtp_host", ""),
+                &fv("smtp_port", "587"),
+                &fv("smtp_user", ""),
+                &json::form_get(&fields, "smtp_pass").unwrap_or("").to_string(),
+                &fv("from", ""),
+                &fv("to", ""),
+                &fv("mode", "starttls"),
+                &fv("cpu", "0"),
+                &fv("mem", "0"),
+                &fv("disk", "0"),
+                &fv("net", "0"),
+                &fv("cooldown", "900"),
+            );
+            ok_bool(ok, msg)
+        }
+        "/api/alert/enable" => ok_bool2(crate::alert::set_enabled(true)),
+        "/api/alert/disable" => ok_bool2(crate::alert::set_enabled(false)),
+        "/api/alert/test" => ok_bool2(crate::alert::test()),
         "/api/tasks/add" => {
             let schedule = json::form_get(&fields, "schedule").unwrap_or("").trim().to_string();
             let command = json::form_get(&fields, "command").unwrap_or("").trim().to_string();

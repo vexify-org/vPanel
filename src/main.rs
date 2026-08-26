@@ -5,6 +5,7 @@
 //!   panel /path/a.yml    # 读取指定配置
 
 mod api;
+mod alert;
 mod auth;
 mod backup;
 mod config;
@@ -35,6 +36,7 @@ mod panel;
 mod plugins;
 mod proxy;
 mod shop;
+mod smtp;
 mod ssl;
 mod security;
 mod system;

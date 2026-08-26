@@ -235,8 +235,8 @@ form.rowform{display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wr
 <div class="toast" id="toast"></div>
 <script>
 var ACCENT='__ACCENT__', SHELL_ON=__SHELL_ON__;
-var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",tk:"定时任务",shop:"软件商店",mcp:"AI 工具",plg:"插件",inf:"系统信息",net:"网络连接",log:"实时日志",fs:"文件管理",dk:"磁盘占用",rp:"反向代理",web:"网站管理",db:"数据库",env:"环境",cert:"SSL证书",bk:"备份",hd:"安全加固",rs:"资源排行"};
-var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["web","网站"],["db","数据库"],["env","环境"],["cert","证书"],["bk","备份"],["hd","安全"],["fw","防火墙"],["tk","定时"],["rp","反代"],["shop","商店"],["mcp","AI"],["plg","插件"],["inf","信息"],["net","连接"],["log","日志"],["fs","文件"],["dk","磁盘"],["rs","资源"]];
+var TITLES={ov:"系统概览",ps:"进程管理",sv:"服务管理",fw:"防火墙端口",al:"告警通知",tk:"定时任务",shop:"软件商店",mcp:"AI 工具",plg:"插件",inf:"系统信息",net:"网络连接",log:"实时日志",fs:"文件管理",dk:"磁盘占用",rp:"反向代理",web:"网站管理",db:"数据库",env:"环境",cert:"SSL证书",bk:"备份",hd:"安全加固",rs:"资源排行"};
+var TABS=[["ov","系统"],["ps","进程"],["sv","服务"],["web","网站"],["db","数据库"],["env","环境"],["cert","证书"],["bk","备份"],["hd","安全"],["fw","防火墙"],["al","告警"],["tk","定时"],["rp","反代"],["shop","商店"],["mcp","AI"],["plg","插件"],["inf","信息"],["net","连接"],["log","日志"],["fs","文件"],["dk","磁盘"],["rs","资源"]];
 if(SHELL_ON)TABS.push(["term","终端"]);
 var cur="ov";
 
@@ -251,7 +251,7 @@ function renderTabs(){var el=$('tabs'),h="";for(var i=0;i<TABS.length;i++){h+='<
 function choose(){window.clearInterval(window._iv);$('ttl').textContent=TITLES[cur]||"终端";
   if(cur==='term'){$('view').innerHTML='<div class="card" style="text-align:center;padding:40px"><a class="pri" style="text-decoration:none;display:inline-block" href="/term">&#9654; 打开 Web 终端</a></div>';return}
   if(cur==='ov'){loadOv();window._iv=setInterval(loadOv,2000)}
-  if(cur==='ps')loadPs(); if(cur==='sv')loadSv(); if(cur==='fw')loadFw(); if(cur==='tk')loadTk();
+  if(cur==='ps')loadPs(); if(cur==='sv')loadSv(); if(cur==='fw')loadFw(); if(cur==='al')loadAl(); if(cur==='tk')loadTk();
   if(cur==='shop')loadShop(); if(cur==='mcp')loadMCP(); if(cur==='plg')loadPlug();
   if(cur==='inf')loadInf(); if(cur==='net'){loadNet();window._iv=setInterval(loadNet,3000)}
   if(cur==='log')loadLogCfg(); if(cur==='fs')loadFs('/');
@@ -440,6 +440,34 @@ function loadFw(){fetch('/api/firewall').then(function(r){return r.json()}).then
 function fwAdd(e){e.preventDefault();post('/api/firewall/add',{action:e.target.action.value,proto:e.target.proto.value,port:e.target.port.value,ip:e.target.ip.value},function(res){toast(res.msg||'已添加');loadFw()})}
 function fwDel(id){if(!confirm('删除规则 #'+id+' ?'))return;post('/api/firewall/del',{id:id},function(res){toast(res.msg||'已删除');loadFw()})}
 function fwEnable(on){post(on?'/api/firewall/enable':'/api/firewall/disable',{},function(res){toast(res.msg||(on?'已启用':'已停用'));loadFw()})}
+
+function loadAl(){fetch('/api/alert').then(function(r){return r.json()}).then(function(d){
+  var on=d.enabled;
+  var h='<div class="toolbar"><span class="muted" style="align-self:center">SMTP 告警 · 加密'+(d.tls?'已支持':'未支持(需 --features tls)')+'</span>';
+  h+=(on?'<button class="mini danger" onclick="alEnable(false)">停用告警</button>':'<button class="mini ok" onclick="alEnable(true)">启用告警</button>')+' <button class="mini" onclick="alTest()">发送测试邮件</button></div>';
+  h+='<form class="gridg" style="grid-template-columns:1fr 1fr;gap:12px" onsubmit="alSave(event)">';
+  h+='<div class="card"><b>SMTP 设置</b>'
+    +'<div class="row"><input id="alhost" placeholder="SMTP 服务器，如 smtp.qq.com" value="'+esc(d.smtp_host)+'" style="flex:1"><input id="alport" placeholder="端口" value="'+(d.smtp_port||587)+'" style="width:76px"></div>'
+    +'<div class="row"><input id="aluser" placeholder="账号（可空）" value="'+esc(d.smtp_user)+'" style="flex:1"><input id="alpass" type="password" placeholder="密码（留空不改）" style="flex:1"></div>'
+    +'<div class="row"><select id="almode"><option value="starttls"'+(d.mode==='starttls'?' selected':'')+'>STARTTLS (587)</option><option value="ssl"'+(d.mode==='ssl'?' selected':'')+'>SSL/TLS (465)</option><option value="none"'+(d.mode==='none'?' selected':'')+'>明文 (25)</option></select><span class="muted">加密方式</span></div>'
+    +'<div class="row"><input id="alfrom" placeholder="发件人邮箱" value="'+esc(d.from)+'" style="flex:1"></div>'
+    +'<div class="row"><input id="alto" placeholder="收件人邮箱（可逗号分隔多个）" value="'+esc(d.to)+'" style="flex:1"></div>'
+    +'</div>';
+  h+='<div class="card"><b>告警阈值（0 = 关闭该项）</b>'
+    +'<div class="row"><span class="muted" style="width:120px">CPU &ge;</span><input id="alcpu" type="number" step="any" min="0" value="'+(d.cpu||0)+'" style="width:84px"><span class="muted">%&nbsp;&nbsp;当前 '+d.current.cpu.toFixed(1)+'%</span></div>'
+    +'<div class="row"><span class="muted" style="width:120px">内存 &ge;</span><input id="almem" type="number" step="any" min="0" value="'+(d.mem||0)+'" style="width:84px"><span class="muted">%&nbsp;&nbsp;当前 '+d.current.mem+'%</span></div>'
+    +'<div class="row"><span class="muted" style="width:120px">磁盘(/) &ge;</span><input id="aldisk" type="number" step="any" min="0" value="'+(d.disk||0)+'" style="width:84px"><span class="muted">%&nbsp;&nbsp;当前 '+d.current.disk+'%</span></div>'
+    +'<div class="row"><span class="muted" style="width:120px">下行带宽 &ge;</span><input id="alnet" type="number" step="any" min="0" value="'+(d.net||0)+'" style="width:84px"><span class="muted">B/s&nbsp;&nbsp;当前 '+fmtB(d.current.net)+'</span></div>'
+    +'<div class="row"><span class="muted" style="width:120px">冷却时间</span><input id="alcooldown" type="number" min="60" value="'+(d.cooldown||900)+'" style="width:84px"><span class="muted">秒（防告警轰炸）</span></div>'
+    +'<div style="margin-top:12px"><button class="pri" type="submit">保存配置</button></div>'
+    +'</div>';
+  h+='</form>';
+  h+='<div class="card" style="margin-top:12px"><span class="muted">'+(on?'告警已开启':'告警已停用')+' · 上次发送: '+(d.last_sent?fmtTime(d.last_sent):'从未发送')+'</span></div>';
+  $('view').innerHTML=h;
+}).catch(function(){$('view').innerHTML='<span class="hot">无法连接 /api/alert</span>'})}
+function alSave(e){e.preventDefault();post('/api/alert/save',{smtp_host:$('alhost').value.trim(),smtp_port:$('alport').value.trim(),smtp_user:$('aluser').value.trim(),smtp_pass:$('alpass').value,mode:$('almode').value,from:$('alfrom').value.trim(),to:$('alto').value.trim(),cpu:$('alcpu').value,mem:$('almem').value,disk:$('aldisk').value,net:$('alnet').value,cooldown:$('alcooldown').value},function(res){toast(res.msg||'已保存');loadAl()})}
+function alEnable(on){post(on?'/api/alert/enable':'/api/alert/disable',{},function(res){toast(res.msg||(on?'已启用':'已停用'));loadAl()})}
+function alTest(){post('/api/alert/test',{},function(res){toast((res.msg||'已发送')+(res.ok?'':'（失败）'))})}
 
 function loadTk(){fetch('/api/tasks').then(function(r){return r.json()}).then(function(d){
   var h='<form class="rowform" onsubmit="tkAdd(event)"><input name="schedule" placeholder="cron 5 段，如 0 2 * * *" required style="width:220px"><input name="command" placeholder="执行命令，如 bash /opt/backup.sh" required style="flex:1;min-width:220px"><button class="pri" type="submit">+ 添加任务</button></form>';
