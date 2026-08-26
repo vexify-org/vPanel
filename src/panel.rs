@@ -265,94 +265,133 @@ function fmtSize(n){if(n==null)return '-';if(n>1073741824)return(n/1073741824).t
 function fmtTime(t){if(!t)return '-';var d=new Date((t<1e12?t*1000:t));return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)}
 function loadDb(){
   var b=$('#box');
-  b.innerHTML='<div class="card"><b>数据库</b> <span id="dbst"></span></div>'+
+  b.innerHTML='<div class="toolbar"><span class="l" style="font-weight:700">数据库</span><button class="mini pri" onclick="loadDb()">刷新</button></div>'+
+    '<div class="card" id="dbstc"><span class="muted">加载中…</span></div>'+
     '<div class="gridg" style="grid-template-columns:1fr 1fr;gap:12px">'+
-      '<div class="card"><b>数据库操作</b><div class="row"><input id="dbname" placeholder="库名"><input id="dbcs" placeholder="字符集(默认utf8mb4)" style="width:140px"><button onclick="postGlobalDB()">建库</button></div>'+
-      '<div class="row"><input id="dbname2" placeholder="删除的库名"><button class="danger" onclick="dropDB()">删库</button></div>'+
-      '<div class="row"><input id="dbuser" placeholder="用户名"><input id="dbpass" type="password" placeholder="密码"><input id="dbhost" placeholder="host(localhost)" style="width:120px"><button onclick="postDBUser()">建用户</button></div>'+
-      '<div class="row"><input id="grantdb" placeholder="授权库"><input id="grantuser" placeholder="用户"><button onclick="grantDB()">授权</button></div>'+
-      '<div class="row"><input id="backupdb" placeholder="备份的库名"><button onclick="backupDB()">备份</button></div>'+
-      '<div class="row"><input id="newroot" type="password" placeholder="新root密码"><button class="danger" onclick="resetRoot()">重置root密码</button></div>'+
+      '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">数据库操作</div>'+
+        '<div class="row"><input id="dbname" placeholder="库名" style="flex:1"><input id="dbcs" placeholder="字符集(utf8mb4)" style="width:130px"><button class="mini ok" onclick="dbCreate()">建库</button></div>'+
+        '<div class="row"><input id="dbname2" placeholder="删除的库名" style="flex:1"><button class="mini danger" onclick="dbDrop()">删库</button></div>'+
+        '<div class="row"><input id="dbuser" placeholder="用户名" style="flex:1"><input id="dbpass" type="password" placeholder="密码" style="flex:1"><input id="dbhost" placeholder="host(localhost)" style="width:100px"><button class="mini ok" onclick="dbUserCreate()">建用户</button></div>'+
+        '<div class="row"><input id="grantdb" placeholder="授权库" style="flex:1"><input id="grantuser" placeholder="用户" style="flex:1"><button class="mini" onclick="dbGrant()">授权</button></div>'+
+        '<div class="row"><input id="backupdb" placeholder="备份的库名" style="flex:1"><button class="mini" onclick="dbBackup()">备份</button></div>'+
+        '<div class="row"><input id="newroot" type="password" placeholder="新root密码" style="flex:1"><button class="mini danger" onclick="dbResetRoot()">重置root密码</button></div>'+
       '</div>'+
-      '<div class="card"><b>用户列表</b><div id="dblist"></div></div>'+
-      '<div class="card"><b>数据库</b><div id="dbnames"></div></div>'+
+      '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">用户列表</div><div id="dbusers" class="muted">加载中…</div></div>'+
+      '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">数据库列表</div><div id="dbnames" class="muted">加载中…</div></div>'+
+      '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">备份文件</div><div id="dbbackups" class="muted">加载中…</div></div>'+
     '</div>';
-  getJson('/api/db/status',function(j){var s=j.installed?(j.running?'运行中':'已装但未运行'):'未安装';$('#dbst').innerHTML='状态：<b>'+s+'</b>（用户：'+esc(j.user||'')+'）'});
-  loadDBName();
+  getJson('/api/db/status',function(j){var s=j.installed?(j.running?'<span class="cool">运行中</span>':'<span class="warm">已装但未运行</span>'):'<span class="hot">未安装</span>';$('#dbstc').innerHTML='状态：<b>'+s+'</b> · 用户：<code>'+esc(j.user||'-')+'</code>'});
+  getJson('/api/db/users',function(j){var d=(j&&j.data)||[];$('#dbusers').innerHTML=d.length?'<div vp-tbl>'+d.map(function(u){return'<div class="kr"><b>'+esc(u.user||'?')+'</b><span class="muted">@'+esc(u.host||'%')+'</span></div>'}).join('')+'</div>':'<span class="muted">暂无用户</span>'});
+  getJson('/api/db/databases',function(j){var d=(j&&j.data)||[];$('#dbnames').innerHTML=d.length?'<div vp-tbl>'+d.map(function(n){return'<div class="kr"><b>'+esc(n)+'</b><span><button class="mini" onclick="dbBackupName(\''+n+'\')">备份</button><button class="mini danger" onclick="dbDropName(\''+n+'\')">删除</button></span></div>'}).join('')+'</div>':'<span class="muted">暂无数据库</span>'});
+  getJson('/api/db/backups',function(j){var d=(j&&j.list)||[];$('#dbbackups').innerHTML=d.length?'<div vp-tbl>'+d.map(function(x){return'<div class="kr"><b>'+esc(x.name)+'</b><span class="muted">'+fmtSize(x.size)+'</span><span class="muted">'+fmtTime(x.time)+'</span><button class="mini" onclick="dbRestore(\''+x.name+'\')">恢复</button></div>'}).join('')+'</div>':'<span class="muted">暂无备份</span>'});
 }
-function postGlobalDB(){var n=$('#dbname').value.trim();if(!n)return toast('请输入库名');act('/api/db/create_db',{db:n,charset:$('#dbcs').value||'utf8mb4'})}
-function dropDB(){var n=$('#dbname2').value.trim();if(!n)return toast('请输入库名');if(!confirm('确认删除数据库 '+n+' ？'))return;act('/api/db/drop_db',{db:n})}
-function postDBUser(){act('/api/db/create_user',{user:$('#dbuser').value,pass:$('#dbpass').value,host:$('#dbhost').value||'localhost'})}
-function grantDB(){act('/api/db/grant',{db:$('#grantdb').value,user:$('#grantuser').value,host:$('#dbhost')?$('#dbhost').value||'localhost':'localhost'})}
-function backupDB(){var n=$('#backupdb').value.trim();if(!n)return toast('请输入库名');act('/api/db/backup',{db:n})}
-function resetRoot(){var p=$('#newroot').value;if(!p||p.length<4)return toast('密码至少4位');if(!confirm('确认重置数据库 root 密码？'))return;act('/api/db/reset_root',{password:p})}
-function loadDBName(){getJson('/api/db/databases',function(j){var d=(j&&j.data)||[];$('dblist').innerHTML='<div vp-tbl>'+d.map(function(n){return'<div class="kr"><b>'+esc(n)+'</b><span><button onclick="backupDBByName(\''+n+'\')">备份</button><button class="danger" onclick="dropDBName(\''+n+'\')">删除</button></span></div>'}).join('')+'</div>';if(d.length===0)$('dblist').innerHTML+='<div class="muted">暂无数据库</div>'})}
-function backupDBByName(n){act('/api/db/backup',{db:n})}
-function dropDBName(n){if(!confirm('确认删除数据库 '+n+' ？'))return;act('/api/db/drop_db',{db:n})}
+function dbCreate(){var n=$('#dbname').value.trim();if(!n)return toast('请输入库名');act('/api/db/create_db',{db:n,charset:$('#dbcs').value||'utf8mb4'})}
+function dbDrop(){var n=$('#dbname2').value.trim();if(!n)return toast('请输入库名');if(!confirm('确认删除数据库 '+n+' ？'))return;act('/api/db/drop_db',{db:n})}
+function dbUserCreate(){act('/api/db/create_user',{user:$('#dbuser').value,pass:$('#dbpass').value,host:$('#dbhost').value||'localhost'})}
+function dbGrant(){act('/api/db/grant',{db:$('#grantdb').value,user:$('#grantuser').value,host:$('#dbhost').value||'localhost'})}
+function dbBackup(){var n=$('#backupdb').value.trim();if(!n)return toast('请输入库名');act('/api/db/backup',{db:n})}
+function dbResetRoot(){var p=$('#newroot').value;if(!p||p.length<4)return toast('密码至少4位');if(!confirm('确认重置数据库 root 密码？'))return;act('/api/db/reset_root',{password:p})}
+function dbBackupName(n){act('/api/db/backup',{db:n})}
+function dbDropName(n){if(!confirm('确认删除数据库 '+n+' ？'))return;act('/api/db/drop_db',{db:n})}
+function dbRestore(n){if(!confirm('确认从 '+n+' 恢复？'))return;act('/api/db/restore',{file:n})}
+
 function loadEnv(){
   var b=$('#box');
-  b.innerHTML='<div class="card"><b>环境运行时</b>（安装需系统软件源可达）</div><div id="envlist" vp-tbl></div>';
-  getJson('/api/env',function(j){var l=(j&&j.list)||[];$('envlist').innerHTML=l.map(function(r){
-    return'<div class="kr"><b>'+esc(r.name)+'</b><span class="muted">'+esc(r.version||'-')+'</span><b style="margin-left:auto">'+((r.installed)?(r.running?'运行中':'已停'):'未安装')+'</b><span>'+
-    (r.installed
-      ?'<button onclick="act(\'/api/env/service\',{id:\''+r.id+'\',action:\'restart\'})">重启</button><button onclick="act(\'/api/env/service\',{id:\''+r.id+'\',action:\'start\'})">启动</button><button class="danger" onclick="act(\'/api/env/service\',{id:\''+r.id+'\',action:\'stop\'})">停止</button>'
-      :'<button onclick="act(\'/api/env/install\',{id:\''+r.id+'\'})">安装</button>')+
-    '</span></div>'
-  }).join('')+'<div class="muted">备注：'+ (l.map(function(r){return esc(r.remark)}).join(' · ')) +'</div>'})
+  b.innerHTML='<div class="toolbar"><span class="l" style="font-weight:700">环境运行时</span><span class="muted" style="align-self:center">安装需系统软件源可达</span><button class="mini pri" onclick="loadEnv()">刷新</button></div>'+
+    '<div id="envlist" class="muted" style="padding:12px 0">加载中…</div>';
+  getJson('/api/env',function(j){var l=(j&&j.list)||[];if(!l.length){$('#envlist').innerHTML='<span class="muted">暂无环境信息</span>';return}
+    var h='';l.forEach(function(r){
+      var st=r.installed?(r.running?'<span class="cool">运行中</span>':'<span class="warm">已停</span>'):'<span class="hot">未安装</span>';
+      var btns=r.installed
+        ?'<button class="mini ok" onclick="envAct(\''+r.id+'\',\'start\')">启动</button><button class="mini" onclick="envAct(\''+r.id+'\',\'restart\')">重启</button><button class="mini danger" onclick="envAct(\''+r.id+'\',\'stop\')">停止</button>'
+        :'<button class="mini ok" onclick="envInstall(\''+r.id+'\')">安装</button>';
+      h+='<div class="kr"><div><b>'+esc(r.name)+'</b> <span class="muted">v'+esc(r.version||'-')+'</span></div>'+st+'<span>'+btns+'</span></div>';
+    });
+    $('#envlist').innerHTML='<div vp-tbl>'+h+'</div><div class="muted" style="margin-top:8px">备注：'+l.map(function(r){return esc(r.remark)}).join(' · ')+'</div>';
+  })
 }
+function envAct(id,action){var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='…'};act('/api/env/service',{id:id,action:action})}
+function envInstall(id){var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='安装中…'};act('/api/env/install',{id:id})}
+
 function loadCert(){
   var b=$('#box');
-  b.innerHTML='<div class="card"><b>SSL 证书</b>（目录 <span id="certsdir"></span>）</div>'+
-    '<div class="card"><b>签发证书</b><div class="row"><input id="cname" placeholder="证书名"><input id="cdomain" placeholder="域名"><button onclick="selfSigned()">自签</button></div>'+
-    '<div class="row"><input id="cdomain2" placeholder="域名"><input id="cwebroot" placeholder="webroot目录"><button onclick="leIssue()">Let\u0027s Encrypt 签发</button></div>'+
-    '<div class="row"><span class="muted">导入已有证书：</span><input id="cimportname" placeholder="证书名" style="width:120px"><button onclick="importCert()">导入「内嵌表单已填」</button></div>'+
-    '<div class="row"><textarea id="cimpfc" rows="3" placeholder="fullchain.pem 内容"></textarea></div>'+
-    '<div class="row"><textarea id="cimpk" rows="3" placeholder="privkey.key 内容"></textarea></div></div>'+
-    '<div id="certlist"></div>';
-  getJson('/api/ssl',function(j){$('#certsdir').textContent=j.dir||'';var l=(j&&j.list)||[];$('#certlist').innerHTML='<div vp-tbl>'+l.map(function(c){
-    return'<div class="kr"><b>'+esc(c.name)+'</b><span class="muted">'+esc(c.domain||'-')+'</span><span class="muted">到期：'+esc(c.not_after||'-')+'</span><span>'+(c.ok?'有效':'无效')+'</span>'+
-    '<button onclick="applyCert(\''+c.name+'\')">套用到站点</button></div>'}).join('')+'</div>'})
+  b.innerHTML='<div class="toolbar"><span class="l" style="font-weight:700">SSL 证书</span><span class="muted" style="align-self:center">目录 <span id="certsdir">-</span></span><button class="mini pri" onclick="loadCert()">刷新</button></div>'+
+    '<div class="gridg" style="grid-template-columns:1fr 1fr;gap:12px">'+
+      '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">签发证书</div>'+
+        '<div class="row"><input id="cname" placeholder="证书名" style="flex:1"><input id="cdomain" placeholder="域名" style="flex:1"><button class="mini ok" onclick="certSelfSigned()">自签</button></div>'+
+        '<div class="row" style="margin-top:8px"><input id="cdomain2" placeholder="域名" style="flex:1"><input id="cwebroot" placeholder="webroot目录" style="flex:1"><button class="mini" onclick="certLeIssue()">Let\'s Encrypt</button></div>'+
+      '</div>'+
+      '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">导入已有证书</div>'+
+        '<div class="row"><input id="cimportname" placeholder="证书名" style="flex:1"><button class="mini" onclick="certImport()">导入</button></div>'+
+        '<textarea id="cimpfc" rows="2" placeholder="fullchain.pem 内容" style="width:100%;margin-top:6px;box-sizing:border-box"></textarea>'+
+        '<textarea id="cimpk" rows="2" placeholder="privkey.key 内容" style="width:100%;margin-top:4px;box-sizing:border-box"></textarea>'+
+      '</div>'+
+    '</div>'+
+    '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">已签发证书</div><div id="certlist" class="muted">加载中…</div></div>';
+  getJson('/api/ssl',function(j){$('#certsdir').textContent=j.dir||'-';var l=(j&&j.list)||[];if(!l.length){$('#certlist').innerHTML='<span class="muted">暂无证书</span>';return}
+    $('#certlist').innerHTML='<div vp-tbl>'+l.map(function(c){
+      return'<div class="kr"><div><b>'+esc(c.name)+'</b> <span class="muted">'+esc(c.domain||'-')+'</span></div><span class="muted">到期：'+esc(c.not_after||'-')+'</span><span>'+(c.ok?'<span class="cool">有效</span>':'<span class="hot">无效</span>')+'</span><button class="mini" onclick="certApply(\''+c.name+'\')">套用到站点</button></div>'
+    }).join('')+'</div>'
+  })
 }
-function selfSigned(){act('/api/ssl/self_signed',{name:$('#cname').value,domain:$('#cdomain').value,days:365})}
-function leIssue(){act('/api/ssl/le_issue',{name:$('#cdomain2').value.replace(/\\./g,'_'),domain:$('#cdomain2').value,webroot:$('#cwebroot').value||'/var/www/html'})}
-function importCert(){act('/api/ssl/import',{name:$('#cimportname').value,fullchain:$('#cimpfc').value,privkey:$('#cimpk').value})}
-function applyCert(n){var site=prompt('套用证书到哪个站点名？');if(!site)return;act('/api/ssl/apply',{site:site,cert:n,upgrade:true})}
+function certSelfSigned(){var n=$('#cname').value.trim(),d=$('#cdomain').value.trim();if(!n||!d)return toast('请填写证书名和域名');act('/api/ssl/self_signed',{name:n,domain:d,days:365})}
+function certLeIssue(){var d=$('#cdomain2').value.trim();if(!d)return toast('请填写域名');act('/api/ssl/le_issue',{name:d.replace(/\./g,'_'),domain:d,webroot:$('#cwebroot').value||'/var/www/html'})}
+function certImport(){var n=$('#cimportname').value.trim();if(!n)return toast('请填写证书名');act('/api/ssl/import',{name:n,fullchain:$('#cimpfc').value,privkey:$('#cimpk').value})}
+function certApply(n){var site=prompt('套用证书到哪个站点名？');if(!site)return;act('/api/ssl/apply',{site:site,cert:n,upgrade:true})}
+
 function loadBk(){
   var b=$('#box');
-  b.innerHTML='<div class="card"><b>备份</b> <span id="bkcfg"></span></div>'+
+  b.innerHTML='<div class="toolbar"><span class="l" style="font-weight:700">备份</span><button class="mini pri" onclick="loadBk()">刷新</button></div>'+
     '<div class="gridg" style="grid-template-columns:1fr 1fr;gap:12px">'+
-      '<div class="card"><b>手动备份</b><div class="row"><button onclick="bkRun()">立即全量备份</button></div>'+
-      '<div class="row"><input id="bksrc" placeholder="要备份的目录路径"><input id="bkkeep" placeholder="保留份数" style="width:100px"><button onclick="bkDir()">目录备份</button></div></div>'+
-      '<div class="card"><b>定时备份</b><div class="row"><input id="bkcron" placeholder="cron 表达式, 默认每天2:00"><button onclick="bkSched()">设置</button></div>'+
-      '<div class="row"><button class="danger" onclick="bkSchedRemove()">移除定时备份</button></div></div>'+
+      '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">手动备份</div>'+
+        '<div class="row"><button class="mini ok" onclick="bkRun()">立即全量备份</button></div>'+
+        '<div class="row" style="margin-top:8px"><input id="bksrc" placeholder="要备份的目录路径" style="flex:1"><input id="bkkeep" placeholder="保留份数" value="5" style="width:80px"><button class="mini" onclick="bkDir()">目录备份</button></div>'+
+      '</div>'+
+      '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">定时备份</div>'+
+        '<div class="row"><input id="bkcron" placeholder="cron 表达式, 默认每天2:00" style="flex:1"><button class="mini" onclick="bkSched()">设置</button></div>'+
+        '<div class="row" style="margin-top:8px"><button class="mini danger" onclick="bkSchedRemove()">移除定时备份</button></div>'+
+      '</div>'+
     '</div>'+
-    '<div class="card"><b>备份文件</b><div id="bkflist"></div></div>';
-  getJson('/api/backup',function(j){$('#bkcfg').textContent='目录：'+(j.dir||'-')+'，保留 '+esc(j.keep)+' 份';var f=(j.files||[]);$('#bkflist').innerHTML='<div vp-tbl>'+f.map(function(x){return'<div class="kr"><b>'+esc(x.name)+'</b><span class="muted">'+fmtSize(x.size)+'</span><span class="muted">'+fmtTime(x.mtime)+'</span><button onclick="bkCloud(\''+x.name.replace(/'/g,"")+'\')">上传云</button></div>'}).join('')+'</div>';if(!f.length)$('#bkflist').innerHTML='<div class="muted">暂无备份文件</div>'})
+    '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">备份配置 <span id="bkcfg" class="muted" style="font-weight:400">加载中…</span></div></div>'+
+    '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">备份文件</div><div id="bkflist" class="muted">加载中…</div></div>';
+  getJson('/api/backup',function(j){$('#bkcfg').textContent='目录：'+(j.dir||'-')+'，保留 '+esc(j.keep)+' 份';var f=(j.files||[]);if(!f.length){$('#bkflist').innerHTML='<span class="muted">暂无备份文件</span>';return}
+    $('#bkflist').innerHTML='<div vp-tbl>'+f.map(function(x){return'<div class="kr"><b>'+esc(x.name)+'</b><span class="muted">'+fmtSize(x.size)+'</span><span class="muted">'+fmtTime(x.mtime)+'</span><button class="mini" onclick="bkCloud(\''+x.name.replace(/'/g,"")+'\')">上传云</button></div>'}).join('')+'</div>'
+  })
 }
 function bkRun(){act('/api/backup/run',{})}
 function bkDir(){act('/api/backup/dir',{path:$('#bksrc').value,keep:$('#bkkeep').value||5})}
 function bkSched(){act('/api/backup/schedule',{cron:$('#bkcron').value||'0 2 * * *'})}
 function bkSchedRemove(){if(!confirm('确认移除定时备份？'))return;act('/api/backup/schedule_remove',{})}
 function bkCloud(f){if(!confirm('上传 '+f+' 到云存储？'))return;act('/api/backup/cloud',{file:f})}
+
 function loadHd(){
   var b=$('#box');
-  b.innerHTML='<div class="card"><b>安全加固</b> <span id="hdstate"></span></div>'+
+  b.innerHTML='<div class="toolbar"><span class="l" style="font-weight:700">安全加固</span><button class="mini pri" onclick="loadHd()">刷新</button></div>'+
     '<div class="gridg" style="grid-template-columns:1fr 1fr;gap:12px">'+
-      '<div class="card"><b>SSH 加固</b><div class="row"><button onclick="harden(true)">禁止root密码登录</button><button class="danger" onclick="unharden()">撤销加固</button></div>'+
-      '<div class="row"><span class="muted">加固将写入 sshd_config.d，先经 sshd -t 校验，失败自动回滚。</span></div></div>'+
-      '<div class="card"><b>WAF</b><span id="wafstate"></span><div class="row"><input id="wafrps" placeholder="每秒请求上限" style="width:120px"><input id="wafburst" placeholder="突发上限" style="width:120px"><button onclick="wafOn()">开启WAF</button></div>'+
-      '<div class="row"><button class="danger" onclick="wafOff()">关闭WAF</button></div></div>'+
+      '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">SSH 加固</div>'+
+        '<div class="row"><span id="hdstate" class="muted">加载中…</span></div>'+
+        '<div class="row" style="margin-top:8px"><button class="mini" onclick="harden(true)">禁止root密码登录</button><button class="mini danger" onclick="unharden()">撤销加固</button></div>'+
+        '<div class="muted" style="margin-top:6px;font-size:12px">加固将写入 sshd_config.d，先经 sshd -t 校验，失败自动回滚。</div>'+
+      '</div>'+
+      '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">WAF 防护</div>'+
+        '<div class="row"><span id="wafstate" class="muted">加载中…</span></div>'+
+        '<div class="row" style="margin-top:8px"><input id="wafrps" placeholder="每秒请求上限" value="30" style="width:110px"><input id="wafburst" placeholder="突发上限" value="50" style="width:90px"><button class="mini ok" onclick="wafOn()">开启</button><button class="mini danger" onclick="wafOff()">关闭</button></div>'+
+      '</div>'+
     '</div>'+
-    '<div class="card"><b>已封禁IP</b><div id="banlist"></div><div class="row"><input id="banip" placeholder="要封禁的IP"><button onclick="banIP()">封禁</button></div>'+
-    '<div class="row"><button onclick="bruteScan()">暴力破解扫描并封禁</button></div></div>';
-  getJson('/api/security/hardening',function(j){$('#hdstate').innerHTML=(j.on)?'当前：已加固':'当前：未加固'});
-  getJson('/api/security/waf',function(j){$('#wafstate').textContent=(j.on)?'已开启':'已关闭'});
-  getJson('/api/security/bans',function(j){var l=(j.list)||[];$('#banlist').innerHTML='<div vp-tbl>'+l.map(function(ip){return'<div class="kr"><b>'+esc(ip)+'</b><button onclick="unbanIP(\''+ip+'\')">解封</button></div>'}).join('')+'</div>';if(!l.length)$('#banlist').innerHTML='<div class="muted">暂无封禁IP</div>'});
+    '<div class="card"><div class="l" style="font-weight:600;margin-bottom:10px">IP 封禁管理</div>'+
+      '<div class="row"><input id="banip" placeholder="要封禁的 IP" style="flex:1"><button class="mini" onclick="banIP()">封禁</button><button class="mini" onclick="bruteScan()">扫描并封禁暴力破解</button></div>'+
+      '<div id="banlist" class="muted" style="margin-top:8px">加载中…</div>'+
+    '</div>';
+  getJson('/api/security/hardening',function(j){$('#hdstate').innerHTML=(j.on)?'<span class="cool">已加固</span>':'<span class="warm">未加固</span>'});
+  getJson('/api/security/waf',function(j){$('#wafstate').innerHTML=(j.on)?'<span class="cool">已开启</span>':'<span class="warm">已关闭</span>'});
+  getJson('/api/security/bans',function(j){var l=(j.list)||[];if(!l.length){$('#banlist').innerHTML='<span class="muted">暂无封禁 IP</span>';return}
+    $('#banlist').innerHTML='<div vp-tbl>'+l.map(function(ip){return'<div class="kr"><b>'+esc(ip)+'</b><button class="mini" onclick="unbanIP(\''+ip+'\')">解封</button></div>'}).join('')+'</div>'
+  })
 }
-function harden(nr){act('/api/security/harden',{no_root_pass:(nr?'1':'0'),no_password:'1'})}
+function harden(nr){if(!confirm('确认 SSH 加固？'))return;act('/api/security/harden',{no_root_pass:(nr?'1':'0'),no_password:'1'})}
 function unharden(){if(!confirm('确认撤销 SSH 加固？'))return;act('/api/security/unharden',{})}
-function wafOn(){act('/api/security/waf/enable',{rps:$('#wafrps').value||30,burst:$('#wafburst').value||50})}
-function wafOff(){act('/api/security/waf/disable',{})}
+function wafOn(){if(!confirm('开启 WAF？'))return;act('/api/security/waf/enable',{rps:$('#wafrps').value||30,burst:$('#wafburst').value||50})}
+function wafOff(){if(!confirm('关闭 WAF？'))return;act('/api/security/waf/disable',{})}
 function banIP(){var ip=$('#banip').value.trim();if(!ip)return toast('请输入IP');act('/api/security/ban',{ip:ip})}
 function unbanIP(ip){act('/api/security/unban',{ip:ip})}
 function bruteScan(){if(!confirm('扫描认证日志并封禁高失败IP？'))return;act('/api/security/brute',{threshold:5})}
