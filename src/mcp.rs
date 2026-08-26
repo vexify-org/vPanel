@@ -924,6 +924,10 @@ fn tools_list(id: Option<i64>, state: &State) -> String {
     ];
     let mut item = Vec::new();
     for (name, desc, schema) in tools {
+        // 只暴露面板管理核心工具；工具性/开发向的杂项一律屏蔽。
+        if !is_core_tool(name) {
+            continue;
+        }
         item.push(format!(
             "{{\"name\":\"{}\",\"description\":\"{}\",\"inputSchema\":{{\"type\":\"object\",\"properties\":{}}}}}",
             name,
@@ -976,6 +980,10 @@ fn tools_call(body: &str, state: &State, id: Option<i64>) -> String {
     // MCP tools/call: params.name 是工具名；params.arguments 是参数。
     // 由于 params 出现在 arguments 之前，首个 "name" 即工具名。
     let name = str_field(body, "name").unwrap_or("").to_string();
+    // 仅允许面板管理核心工具；工具性/开发向的杂项一律拒绝执行。
+    if !is_core_tool(&name) {
+        return fmt_jsonrpc(id, format!("{{\"content\":[{{\"type\":\"text\",\"text\":\"未知或已废弃工具: {}\"}}],\"isError\":true}}", json::jesc(&name)), false);
+    }
     // 解析 arguments 对象里的各字段。
     let args = extract_arg_json(body);
     let pid = arg_str(&args, "pid");
@@ -2098,6 +2106,60 @@ fn skill(s: &str) -> String {
     s.chars()
         .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
         .collect()
+}
+
+/// 是否为「面板管理核心工具」（MCP 白名单）。
+/// 面板 MCP 只应暴露服务器管理能力；纯工具性/开发向的杂项（文本/数学/编码/
+/// 换算/时间/字符串等）一律剔除。
+fn is_core_tool(name: &str) -> bool {
+    // 插件工具（p_ 前缀）允许。
+    if name.starts_with("p_") {
+        return true;
+    }
+    let core = [
+        // ---- 系统 / 进程 / 服务 / 防火墙 / 任务 ----
+        "system_overview", "system_info", "system_restart",
+        "list_processes", "kill_process", "resource_top",
+        "list_services", "service_action",
+        "list_firewall", "firewall_add", "firewall_del",
+        "list_tasks", "task_add",
+        "list_conns", "kill_conn",
+        "monitor_snapshot",
+        // ---- 文件 / 日志 ----
+        "list_files", "read_file", "write_file", "delete_path",
+        "file_mkdir", "file_rename", "log_tail", "log_follow",
+        "disk_usage", "disk_top",
+        // ---- 网站 / nginx ----
+        "list_nginx", "nginx_add", "nginx_toggle", "nginx_delete", "nginx_reload", "autostart",
+        "website_list", "website_create", "website_toggle", "website_delete", "website_rewrite",
+        // ---- 数据库 ----
+        "db_status", "db_databases", "db_users", "db_backups",
+        "db_create_db", "db_drop_db", "db_create_user", "db_drop_user", "db_grant",
+        "db_backup", "db_restore", "db_reset_root",
+        // ---- SSL 证书 ----
+        "ssl_list", "ssl_import", "ssl_self_signed", "ssl_le_issue", "ssl_apply",
+        // ---- 运行环境 ----
+        "env_status", "env_install", "env_service",
+        // ---- 备份 ----
+        "backup_list", "backup_dir", "backup_run",
+        "backup_schedule", "backup_schedule_remove", "backup_cloud",
+        // ---- 安全 ----
+        "security_bans", "security_hardening", "security_waf_status",
+        "security_ban", "security_unban", "security_brute",
+        "security_waf_enable", "security_waf_disable",
+        "security_harden", "security_unharden",
+        // ---- 插件 / 商店 / KV ----
+        "plugin_store", "plugin_store_install", "plugin_kv",
+        "plugin_enable", "plugin_disable", "shop_list",
+        // ---- Docker ----
+        "docker_containers", "docker_action",
+        // ---- 反向代理 / 兼容插件 ----
+        "proxy_list", "proxy_add", "proxy_del",
+        "iota_list", "iota_status", "iota_log", "iota_start",
+        "iota_stop", "iota_restart", "iota_uninstall",
+        "iota_keepalive", "iota_install_url",
+    ];
+    core.contains(&name)
 }
 
 /// 插件快照（避免持有锁过久）。
