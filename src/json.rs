@@ -134,3 +134,77 @@ pub fn run_out(cmd: &str, args: &[&str]) -> Option<String> {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn jesc_escapes_specials() {
+        assert_eq!(jesc("a\"b"), "a\\\"b");
+        assert_eq!(jesc("a\\b"), "a\\\\b");
+        assert_eq!(jesc("a\nb"), "a\\nb");
+        assert_eq!(jesc("a\r\tb"), "a\\r\\tb");
+    }
+
+    #[test]
+    fn jesc_keeps_plain_utf8() {
+        assert_eq!(jesc("hello 世界"), "hello 世界");
+        assert_eq!(jesc(""), "");
+    }
+
+    #[test]
+    fn jesc_escapes_control_bytes() {
+        assert_eq!(jesc("\u{01}"), "\\u0001");
+    }
+
+    #[test]
+    fn parse_form_decodes_percent_and_plus() {
+        let f = parse_form(b"a=hello+world&b=%E4%B8%AD%E6%96%87&c");
+        assert_eq!(form_get(&f, "a"), Some("hello world"));
+        assert_eq!(form_get(&f, "b"), Some("中文"));
+        // 无 '=' 的键 → 空值
+        assert_eq!(form_get(&f, "c"), Some(""));
+    }
+
+    #[test]
+    fn parse_form_empty_body() {
+        assert!(parse_form(b"").is_empty());
+        assert!(parse_form(b"&").is_empty());
+    }
+
+    #[test]
+    fn parse_form_malformed_percent_is_literal() {
+        // 不完整 / 非法百分号按原样保留
+        let f = parse_form(b"a=100%");
+        assert_eq!(form_get(&f, "a"), Some("100%"));
+    }
+
+    #[test]
+    fn json_field_reads_string_number_bool() {
+        assert_eq!(json_field(b"{\"k\":\"v\"}", "k").as_deref(), Some("v"));
+        assert_eq!(json_field(b"{\"k\": 42}", "k").as_deref(), Some("42"));
+        assert_eq!(json_field(b"{\"k\":true}", "k").as_deref(), Some("true"));
+        assert_eq!(json_field(b"{\"k\":false}", "k").as_deref(), Some("false"));
+    }
+
+    #[test]
+    fn json_field_unescapes() {
+        assert_eq!(json_field(b"{\"k\":\"a\\nb\"}", "k").as_deref(), Some("a\nb"));
+    }
+
+    #[test]
+    fn json_field_missing_is_none() {
+        assert_eq!(json_field(b"{\"x\":1}", "k"), None);
+        assert_eq!(json_field(b"not json", "k"), None);
+    }
+
+    #[test]
+    fn json_bool_matches_true_only() {
+        assert!(json_bool(b"{\"k\":true}", "k"));
+        assert!(!json_bool(b"{\"k\":false}", "k"));
+        // 非 "true" 的字符串算作 false
+        assert!(!json_bool(b"{\"k\":\"yes\"}", "k"));
+        assert!(!json_bool(b"{}", "k"));
+    }
+}

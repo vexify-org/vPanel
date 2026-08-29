@@ -348,3 +348,54 @@ pub fn check(mon: &crate::system::Monitor) -> (bool, String) {
         Err(e) => (false, e),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fmt_bps_units() {
+        assert_eq!(fmt_bps(0), "0 B/s");
+        assert_eq!(fmt_bps(1023), "1023 B/s");
+        assert_eq!(fmt_bps(1024), "1.0 KB/s");
+        assert_eq!(fmt_bps(1536), "1.5 KB/s");
+        assert_eq!(fmt_bps(1024 * 1024), "1.0 MB/s");
+    }
+
+    #[test]
+    fn recipients_splits_and_trims() {
+        assert_eq!(recipients(""), Vec::<String>::new());
+        assert_eq!(recipients("a@x.com"), vec!["a@x.com".to_string()]);
+        assert_eq!(
+            recipients("a@x.com, b@y.com ,"),
+            vec!["a@x.com".to_string(), "b@y.com".to_string()]
+        );
+        assert_eq!(recipients(",,,"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn alert_defaults() {
+        let a = Alert::default();
+        assert!(!a.enabled);
+        assert_eq!(a.smtp_port, 587);
+        assert_eq!(a.mode, "starttls");
+        assert_eq!(a.cooldown, 900);
+        assert_eq!(a.cpu, 0.0);
+        assert_eq!(a.net, 0);
+    }
+
+    #[test]
+    fn alert_serde_roundtrip() {
+        let a = Alert { enabled: true, smtp_host: "smtp.example.com".into(), smtp_port: 465,
+            smtp_user: "u".into(), smtp_pass: "p".into(), from: "f@x.com".into(),
+            to: "t@x.com".into(), mode: "ssl".into(), cpu: 80.0, mem: 90.0, disk: 85.0,
+            net: 10_000_000, cooldown: 600, last_sent: 0 };
+        let j = serde_json::to_string(&a).expect("serialize");
+        let b: Alert = serde_json::from_str(&j).expect("deserialize");
+        assert_eq!(b.smtp_host, "smtp.example.com");
+        assert_eq!(b.smtp_port, 465);
+        assert_eq!(b.mode, "ssl");
+        assert_eq!(b.cpu, 80.0);
+        assert_eq!(b.net, 10_000_000);
+    }
+}
