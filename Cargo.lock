@@ -651,6 +651,8 @@ dependencies = [
  "rustls",
  "rustls-pemfile",
  "serde",
+ "serde_core",
+ "serde_derive",
  "serde_json",
  "serde_yaml",
  "sha1",

@@ -4,7 +4,7 @@
 [![Rust](https://img.shields.io/badge/Rust-2021-orange.svg)](https://www.rust-lang.org/)
 [![GitHub](https://img.shields.io/badge/GitHub-vexify--org%2FvPanel-181717.svg?logo=github)](https://github.com/vexify-org/vPanel)
 
-> 用纯 Rust 从零手写的一台「服务器控制台」——**常驻内存约 1MB**，重载下不到 2MB，硬性预算 10MB。
+> 用纯 Rust 从零手写的一台「服务器控制台」——**常驻内存约 0.4MB，峰值 ≈3MB**，硬性预算 10MB。
 >
 > 极简是设计哲学，边界由扩展决定：进程、服务、安全、任务、应用商店、**AI 直连** —— 都在同一个屏幕里。
 >
@@ -152,7 +152,7 @@
 
 | 维度 | vPanel | 传统重量级面板 | IotaPanel |
 |------|--------|----------------|-----------|
-| 常驻内存 | ~1MB | 上百 MB | ~8MB |
+| 常驻内存 | ~0.4MB | 上百 MB | ~8MB |
 | 依赖 | 无（单二进制） | 需要语言运行时 / 数据库 | 单二进制 |
 | 配置 | YAML | 数据库 / 复杂 UI | 配置文件 |
 | 插件 | YAML DSL + 微脚本 | 生态复杂 | 独立进程（任意语言） |
@@ -679,7 +679,7 @@ cooldown     冷却秒数（默认 900）
 
 ### 工具规模
 
-**内置 808 个 MCP 工具**（纯函数、各自独立），叠加插件系统后总计可达 **1,244 个工具**。一整支运维军队，由 AI 指挥。
+**内置 93 个 MCP 工具**（纯函数、各自独立），叠加插件系统后还能按需注入自定义工具。一整支运维军队，由 AI 指挥。
 
 ### MCP 安全性
 
@@ -1348,7 +1348,7 @@ A：把 MCP 客户端指向 `http://<host>:8080/mcp`，详见[AI 工具（MCP）
 A：请升级到 1.6.x（已修复表单 `Content-Type` 与参数解析）。操作类接口请用 `application/x-www-form-urlencoded` 编码。
 
 **Q：能跑在我 512MB 的 VPS 上吗？**
-A：能。常驻约 1MB，对低配机器几乎无感知。
+A：能。常驻约 0.4MB、峰值约 3MB，对低配机器几乎无感知。
 
 **Q：数据放在哪？**
 A：默认当前工作目录（pid / 日志 / 配置 / 证书 / 备份 / kv 均在其下），可用 `VPVPANEL_DIR` 改变。

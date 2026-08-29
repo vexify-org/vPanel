@@ -18,9 +18,13 @@ tls = ["dep:rustls", "dep:rustls-pemfile", "dep:rcgen", "dep:webpki-roots"]
 terminal = ["dep:portable-pty"]
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_yaml = "0.9"
-serde_json = "1"
+# serde 家族锁定到与 Cargo.lock 一致的精确版本，避免 Rust 1.98 下
+# serde_core 重复定义（E0428）导致源码无法编译的问题。
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_core = "=1.0.229"
+serde_derive = "=1.0.229"
+serde_json = "=1.0.151"
+serde_yaml = "=0.9.34+deprecated"
 # Web 终端（PTY + WebSocket）——可选特性，默认不含（省便携 PTY 依赖体积）。
 portable-pty = { version = "0.8", optional = true }
 sha1 = "0.10"
