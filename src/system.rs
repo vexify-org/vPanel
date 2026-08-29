@@ -449,3 +449,54 @@ pub fn kill_pid(pid: u32) -> bool {
         .map(|s| s.success())
         .unwrap_or(false)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ring_buffers_with_cap() {
+        let q = std::sync::Mutex::new(std::collections::VecDeque::new());
+        for i in 0..10 {
+            push_ring(&q, i, 3);
+        }
+        let g = q.lock().unwrap();
+        assert_eq!(g.len(), 3);
+        assert_eq!(*g.front().unwrap(), 7);
+        assert_eq!(*g.back().unwrap(), 9);
+    }
+
+    #[test]
+    fn ring_under_cap_keeps_all() {
+        let q = std::sync::Mutex::new(std::collections::VecDeque::new());
+        for i in 0..2 {
+            push_ring(&q, i, 5);
+        }
+        assert_eq!(q.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn floats_to_json() {
+        let mut d = std::collections::VecDeque::new();
+        d.push_back(12.34);
+        d.push_back(5.0);
+        assert_eq!(super::floats_to_json(&d), "[12.3,5.0]");
+        assert_eq!(super::floats_to_json(&std::collections::VecDeque::new()), "[]");
+    }
+
+    #[test]
+    fn uints_to_json() {
+        let mut d = std::collections::VecDeque::new();
+        d.push_back(1);
+        d.push_back(200);
+        assert_eq!(super::uints_to_json(&d), "[1,200]");
+    }
+
+    #[test]
+    fn parse_kb_returns_bytes() {
+        assert_eq!(parse_kb("512"), 512 * 1024);
+        assert_eq!(parse_kb("0"), 0);
+        assert_eq!(parse_kb(" 128 foo"), 128 * 1024);
+        assert_eq!(parse_kb("abc"), 0);
+    }
+}

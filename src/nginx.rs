@@ -353,3 +353,58 @@ pub fn autostart_json() -> String {
     items.sort();
     format!("{{\"ok\":true,\"list\":[{}]}}", items.join(","))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn valid_name_accepts_safe_names() {
+        assert!(valid_name("my_site-1.com"));
+        assert!(valid_name("a"));
+        assert!(valid_name("www.example.org"));
+    }
+
+    #[test]
+    fn valid_name_rejects_unsafe() {
+        assert!(!valid_name(""));
+        assert!(!valid_name("with space"));
+        assert!(!valid_name("a/b"));
+        assert!(!valid_name("a;rm -rf"));
+        assert!(!valid_name(&"x".repeat(65))); // 超长
+    }
+
+    #[test]
+    fn parse_conf_extracts_fields() {
+        let conf = r#"server {
+    listen 8088;
+    server_name example.com;
+    location / {
+        proxy_pass http://127.0.0.1:9999;
+    }
+    ssl_certificate /etc/letsencrypt/cert.pem;
+}"#;
+        let (listen, server_name, proxy, ssl) = parse_conf(conf);
+        assert_eq!(listen, "8088");
+        assert_eq!(server_name, "example.com");
+        assert_eq!(proxy, "http://127.0.0.1:9999");
+        assert!(ssl);
+    }
+
+    #[test]
+    fn parse_conf_empty() {
+        let (listen, server_name, proxy, ssl) = parse_conf("");
+        assert_eq!(listen, "");
+        assert_eq!(server_name, "");
+        assert_eq!(proxy, "");
+        assert!(!ssl);
+    }
+
+    #[test]
+    fn reverse_proxy_conf_injects_values() {
+        let c = reverse_proxy_conf("example.com", "443", "http://127.0.0.1:9000");
+        assert!(c.contains("listen 443;"));
+        assert!(c.contains("server_name example.com;"));
+        assert!(c.contains("proxy_pass http://127.0.0.1:9000;"));
+    }
+}

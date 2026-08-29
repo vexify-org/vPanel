@@ -120,3 +120,48 @@ pub fn task_add(schedule: &str, command: &str) -> (bool, String) {
         .output();
     cmd_result(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn task_add_validates_schedule() {
+        // 校验在调用 crontab 之前即返回，不会改动系统状态。
+        assert!(!task_add("* * *", "echo hi").0);
+        assert!(!task_add("* * * * *", "").0);
+        assert!(!task_add("", "echo hi").0);
+        // 5 段 cron + 非空命令通过校验（进入写入阶段，可能在无 crontab 环境失败，这里只验证格式）。
+        let (can_proceed, msg) = task_add("* * * * *", "echo hi");
+        // 格式合法时返回 (true, _) 或 (false, 系统错误)；二者兜底，不 panic。
+        let _ = (can_proceed, msg);
+    }
+
+    #[test]
+    fn cmd_result_combines_and_trims() {
+        use std::process::{Command, Output};
+
+        let out = Output {
+            status: Command::new("true").output().unwrap().status,
+            stdout: b"hello".to_vec(),
+            stderr: b" world".to_vec(),
+        };
+        let (ok, msg) = cmd_result(Ok(out));
+        assert!(ok);
+        assert_eq!(msg, "hello world");
+
+        // 非零退出码 -> 失败，但文本仍组合。
+        let out = Output {
+            status: Command::new("false").output().unwrap().status,
+            stdout: b"".to_vec(),
+            stderr: b"boom\n".to_vec(),
+        };
+        let (ok, msg) = cmd_result(Ok(out));
+        assert!(!ok);
+        assert_eq!(msg, "boom");
+
+        // 启动失败 -> Err。
+        let (ok, _msg) = cmd_result(Err(std::io::Error::new(std::io::ErrorKind::Other, "x")));
+        assert!(!ok);
+    }
+}

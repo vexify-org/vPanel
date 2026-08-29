@@ -215,3 +215,67 @@ fn default_apps() -> Vec<App> {
         App { id: "fail2ban".into(), name: "Fail2ban".into(), desc: "暴力破解防护".into(), script: "set -e\napt-get update -qq && apt-get install -y -qq fail2ban\nsystemctl enable --now fail2ban\n".into() },
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cfg_with(accel: &str, store: &str) -> Config {
+        let mut c = Config::default();
+        c.download.accel = accel.to_string();
+        c.download.store = store.to_string();
+        c
+    }
+
+    #[test]
+    fn accel_of_defaults_and_normalizes() {
+        // 空则回退默认，并保证以 `/` 结尾。
+        assert_eq!(accel_of(&cfg_with("", "")), DEFAULT_ACCEL);
+        // 已带尾斜杠不再重复。
+        assert_eq!(accel_of(&cfg_with("https://cdn.example/", "")), "https://cdn.example/");
+        // 去空格/去尾斜杠后补 `/`。
+        assert_eq!(accel_of(&cfg_with("  https://cdn.example  ", "")), "https://cdn.example/");
+    }
+
+    #[test]
+    fn make_list_url_builds_raw_github() {
+        let c = cfg_with("https://accel/", "vexify-org/vp-store");
+        assert_eq!(
+            make_list_url(&c, "https://accel/"),
+            "https://accel/https://raw.githubusercontent.com/vexify-org/vp-store/refs/heads/main/apps.yml"
+        );
+    }
+
+    #[test]
+    fn make_list_url_keeps_branch() {
+        let c = cfg_with("", "vexify-org/vp-store@dev");
+        assert_eq!(
+            make_list_url(&c, "https://g.z321.cc.cd/"),
+            "https://g.z321.cc.cd/https://raw.githubusercontent.com/vexify-org/vp-store/refs/heads/dev/apps.yml"
+        );
+    }
+
+    #[test]
+    fn chunk_tail_combines_and_truncates() {
+        // 组合两端输出。
+        assert_eq!(chunk_tail(b"out", b"err", 600), "out\nerr");
+        // 超出上限从尾部截断并加前缀；截断后保留的字符数 ≤ 上限。
+        let s = chunk_tail(b"hello", b"", 4);
+        assert!(s.starts_with("[…截断] "));
+        let tail = s.strip_prefix("[…截断] ").unwrap();
+        assert!(tail.chars().count() <= 4);
+        // 空输入返回空串。
+        assert_eq!(chunk_tail(b"", b"", 10), "");
+    }
+
+    #[test]
+    fn apps_file_parses_yaml() {
+        let yml = "apps:\n- id: nginx\n  name: Nginx\n  desc: 服务器\n- id: redis\n  name: Redis\n  desc: 缓存\n";
+        let f: AppsFile = serde_yaml::from_str(yml).unwrap();
+        assert_eq!(f.apps.len(), 2);
+        assert_eq!(f.apps[0].id, "nginx");
+        assert_eq!(f.apps[0].name, "Nginx");
+        // script 缺省 -> 空串。
+        assert_eq!(f.apps[1].script, "");
+    }
+}

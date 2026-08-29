@@ -691,3 +691,51 @@ fn authenticated_admin_endpoint(
     }
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn percent_decode_basic() {
+        assert_eq!(percent_decode("a+b%20c"), "a b c");
+        assert_eq!(percent_decode("hello"), "hello");
+        assert_eq!(percent_decode("%"), "%");
+        assert_eq!(percent_decode("%4"), "%4");
+    }
+
+    #[test]
+    fn query_val_extracts_key() {
+        assert_eq!(query_val("/api/x?n=10&path=/etc", "n"), Some("10".into()));
+        assert_eq!(query_val("/api/x?path=/etc&n=10", "path"), Some("/etc".into()));
+        // 无查询串。
+        assert_eq!(query_val("/api/x", "n"), None);
+        // 无 '=' 的键值为空串。
+        assert_eq!(query_val("/api/x?flag", "flag"), Some(String::new()));
+    }
+
+    #[test]
+    fn header_val_case_insensitive() {
+        let head = "GET / HTTP/1.1\r\nHost: example.com\r\nUser-Agent: curl\r\n\r\n";
+        assert_eq!(header_val(head, "Host"), Some("example.com"));
+        assert_eq!(header_val(head, "user-agent"), Some("curl"));
+        assert_eq!(header_val(head, "Cookie"), None);
+    }
+
+    #[test]
+    fn sess_cookie_remember_sets_max_age() {
+        let lazy = sess_cookie("abc", false);
+        assert!(lazy.contains("vp_session=abc"));
+        assert!(!lazy.contains("Max-Age"));
+        let persist = sess_cookie("abc", true);
+        assert!(persist.contains("Max-Age=2592000"));
+    }
+
+    #[test]
+    fn auth_err_builds_failure_json() {
+        let r = auth_err("登录失败");
+        assert_eq!(r.status, "200 OK");
+        assert!(r.set_cookie.is_none());
+        assert_eq!(String::from_utf8_lossy(&r.body), "{\"ok\":false,\"msg\":\"登录失败\"}");
+    }
+}

@@ -210,3 +210,35 @@ mod tls_impl {
 
 #[cfg(feature = "tls")]
 pub use tls_impl::{accept, RealServer as Server};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn local_pair() -> (TcpStream, TcpStream) {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = l.local_addr().unwrap();
+        let c1 = TcpStream::connect(addr).unwrap();
+        let (c2, _) = l.accept().unwrap();
+        (c1, c2)
+    }
+
+    #[test]
+    fn tcp_stream_io_trait() {
+        let (mut c1, _c2) = local_pair();
+        // peer_ip：本机回环。
+        assert_eq!(c1.peer_ip(), Some("127.0.0.1".into()));
+        // set_rto 尽力而为。
+        c1.set_rto(Duration::from_millis(10));
+        // dup 复制出独立句柄。
+        let d = c1.dup().expect("tcp 应可 clone");
+        assert!(d.peer_ip().is_some());
+    }
+
+    #[test]
+    fn server_build_default_disabled() {
+        // 默认配置 enabled=false -> 不启用 HTTPS，构建不依赖任何外部文件。
+        let s = Server::build(&crate::config::Tls::default()).unwrap();
+        assert!(!s.enabled());
+    }
+}

@@ -343,3 +343,51 @@ pub fn set_enabled(on: bool) -> (bool, String) {
         Err(e) => (false, e),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn valid_port_accepts_single_and_range() {
+        assert!(valid_port(""));
+        assert!(valid_port("8080"));
+        assert!(valid_port("53"));
+        assert!(valid_port("8000-9000"));
+    }
+
+    #[test]
+    fn valid_port_rejects_bad() {
+        assert!(!valid_port("-1"));
+        assert!(!valid_port("80-"));
+        assert!(!valid_port("80--90"));
+        assert!(!valid_port("a80"));
+        assert!(!valid_port("80-90-100"));
+        assert!(!valid_port(" "));
+    }
+
+    #[test]
+    fn valid_ip_accepts_common_forms() {
+        assert!(valid_ip(""));
+        assert!(valid_ip("1.2.3.4"));
+        assert!(valid_ip("2001:db8::1"));
+        assert!(valid_ip("10.0.0.1/24"));
+        assert!(valid_ip("a-b_c.d"));
+    }
+
+    #[test]
+    fn valid_ip_rejects_spaces_and_special() {
+        assert!(!valid_ip("1.2.3.4 5"));
+        assert!(!valid_ip("a@b"));
+        assert!(!valid_ip("a;b"));
+        assert!(!valid_ip("a(b)"));
+    }
+
+    #[test]
+    fn verdict_maps_action_words() {
+        assert_eq!(verdict("allow"), "accept");
+        assert_eq!(verdict("deny"), "drop");
+        // 未知动作默认 accept
+        assert_eq!(verdict("something-else"), "accept");
+    }
+}

@@ -1016,3 +1016,34 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let mm = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
     ((if mm <= 2 { y + 1 } else { y }), mm, dd)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn civil_from_days_at_epoch_and_boundaries() {
+        // Unix epoch
+        assert_eq!(civil_from_days(0), (1970, 1, 1));
+        assert_eq!(civil_from_days(1), (1970, 1, 2));
+        // 1970 非闰年，第 365 天为次年元旦
+        assert_eq!(civil_from_days(365), (1971, 1, 1));
+        // 1972-01-01（730 天攒满 1970/1971 两个平年）
+        assert_eq!(civil_from_days(730), (1972, 1, 1));
+    }
+
+    #[test]
+    fn civil_from_days_roundtrip_2k_leap() {
+        // 2000-01-01 = epoch 第 10957 天（1970..1999 含 7 个闰年）
+        let days = 10957;
+        assert_eq!(civil_from_days(days), (2000, 1, 1));
+        // 2000-02-29（闰日）距年初 59 天
+        assert_eq!(civil_from_days(days + 59), (2000, 2, 29));
+    }
+
+    #[test]
+    fn url_encode_spaces_and_specials() {
+        assert_eq!(url_encode("a b"), "a%20b");
+        assert_eq!(url_encode("a/b"), "a%2Fb");
+    }
+}

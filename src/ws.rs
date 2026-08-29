@@ -166,3 +166,24 @@ fn read_exact(r: &mut dyn Io, buf: &mut [u8]) -> std::io::Result<()> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ws_accept_matches_rfc6455_example() {
+        // RFC 6455 §1.3：Sec-WebSocket-Key 示例及其对应的 Accept 值。
+        assert_eq!(
+            ws_accept("dGhlIHNhbXBsZSBub25jZQ=="),
+            "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
+        );
+    }
+
+    #[test]
+    fn ws_accept_is_deterministic() {
+        let a = ws_accept("abc123");
+        assert_eq!(a, ws_accept("abc123"));
+        assert_ne!(a, ws_accept("different"));
+    }
+}

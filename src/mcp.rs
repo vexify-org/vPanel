@@ -1483,3 +1483,39 @@ fn db_backups_text(cfg: &crate::config::Config) -> String {
         .join(",");
     format!("{{\"ok\":true,\"dir\":\"{}\",\"list\":[{}]}}", json::jesc(dir), arr)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn core_tools_allowlisted() {
+        assert!(is_core_tool("system_overview"));
+        assert!(is_core_tool("list_processes"));
+        assert!(is_core_tool("firewall_add"));
+        assert!(is_core_tool("backup_run"));
+        assert!(is_core_tool("iota_install_url"));
+    }
+
+    #[test]
+    fn plugin_tools_allowed() {
+        // `p_` 前缀视为插件工具，白名单放行（含单段插件名）。
+        assert!(is_core_tool("p_demo"));
+        assert!(is_core_tool("p_demo_greet"));
+        assert!(is_core_tool("p_anything"));
+    }
+
+    #[test]
+    fn unknown_tools_rejected() {
+        assert!(!is_core_tool("rm_rf"));
+        assert!(!is_core_tool("format_disk"));
+        assert!(!is_core_tool(""));
+        assert!(!is_core_tool("exploit"));
+    }
+
+    #[test]
+    fn str_field_extracts() {
+        assert_eq!(str_field(r#"{"name":"x"}"#, "name"), Some("x"));
+        assert_eq!(str_field(r#"{"a":1}"#, "b"), None);
+    }
+}

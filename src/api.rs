@@ -735,3 +735,47 @@ fn ok_bool(ok: bool, msg: String) -> String {
 fn err(msg: &str) -> String {
     format!("{{\"ok\":false,\"msg\":\"{}\"}}", json::jesc(msg))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pct_dec_handles_plus_and_pct() {
+        assert_eq!(pct_dec("a+b"), "a b");
+        assert_eq!(pct_dec("hello%20world"), "hello world");
+        assert_eq!(pct_dec("%E4%B8%AD%E6%96%87"), "中文");
+        // 非法转义原样保留。
+        assert_eq!(pct_dec("%zz"), "%zz");
+        // 末尾孤立 % 原样保留。
+        assert_eq!(pct_dec("abc%"), "abc%");
+    }
+
+    #[test]
+    fn question_query_parses_kv() {
+        let q = question_query("a=1&b=hello+world&c=%E4%B8%AD&flag&");
+        assert_eq!(q_get(&q, "a"), Some("1"));
+        assert_eq!(q_get(&q, "b"), Some("hello world"));
+        assert_eq!(q_get(&q, "c"), Some("中"));
+        // 无 '=' 的字段取到空串。
+        assert_eq!(q_get(&q, "flag"), Some(""));
+        // 空片段被过滤；未知键为 None。
+        assert_eq!(q_get(&q, "missing"), None);
+    }
+
+    #[test]
+    fn ok_bool_and_err_build_json() {
+        assert_eq!(ok_bool(true, String::new()), "{\"ok\":true,\"msg\":\"\"}");
+        assert_eq!(ok_bool(false, "bad".into()), "{\"ok\":false,\"msg\":\"bad\"}");
+        assert_eq!(err("no path"), "{\"ok\":false,\"msg\":\"no path\"}");
+    }
+
+    #[test]
+    fn dbj_helpers_format() {
+        assert_eq!(dbj((true, "ok".into())), "{\"ok\":true,\"msg\":\"ok\"}");
+        assert_eq!(dbj((false, "err".into())), "{\"ok\":false,\"msg\":\"err\"}");
+        // dbj2 成功时把第二项当 JSON 数组嵌入。
+        assert_eq!(dbj2((true, "[]".into())), "{\"ok\":true,\"data\":[]}");
+        assert_eq!(dbj2((false, "denied".into())), "{\"ok\":false,\"msg\":\"denied\"}");
+    }
+}

@@ -287,3 +287,26 @@ fn proxy_error(client: &mut dyn crate::tls::Io, msg: &str) -> String {
     let _ = client.flush();
     String::new()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn find_eoh_locates_header_end() {
+        assert_eq!(find_eoh(b"GET / HTTP/1.1\r\nHost: x\r\n\r\nbody"), Some(27));
+        assert_eq!(find_eoh(b"\r\n\r\n"), Some(4));
+        assert_eq!(find_eoh(b"no headers here"), None);
+        assert_eq!(find_eoh(b""), None);
+    }
+
+    #[test]
+    fn header_has_matches_case_insensitive() {
+        let head = "GET / HTTP/1.1\r\nHost: example.com\r\nX-Upgrade: 1\r\n";
+        assert!(header_has(head, "host", "example.com"));
+        assert!(header_has(head, "HOST", "EXAMPLE.COM"));
+        assert!(header_has(head, "x-upgrade", "1"));
+        assert!(!header_has(head, "host", "other.com"));
+        assert!(!header_has(head, "connection", "upgrade"));
+    }
+}

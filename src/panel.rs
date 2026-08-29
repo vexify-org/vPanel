@@ -944,3 +944,28 @@ body{margin:0;padding:0;background:__BG__;font-family:system-ui,sans-serif;heigh
 </body>
 </html>
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn esc_attr_minimally_escapes() {
+        assert_eq!(esc_attr("plain"), "plain");
+        // 反斜杠优先转义。
+        assert_eq!(esc_attr("a\\b"), "a\\\\b");
+        // 双引号 -> &quot;。
+        assert_eq!(esc_attr("say \"hi\""), "say &quot;hi&quot;");
+        // 尖括号：只转义 `<`（> 不在转义白名单内）。
+        assert_eq!(esc_attr("</script>"), "&lt;/script>");
+        // 换行折叠为空格。
+        assert_eq!(esc_attr("a\nb"), "a b");
+    }
+
+    #[test]
+    fn rss_kb_reads_proc_self() {
+        // Linux 下 /proc/self/status 必然存在，且常驻内存应 > 0。
+        let kb = rss_kb();
+        assert!(kb > 0);
+    }
+}

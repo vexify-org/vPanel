@@ -521,3 +521,84 @@ fn d_iota_port_hi() -> u16 {
 fn d_iota_idle() -> u64 {
     300
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_config_has_sane_defaults() {
+        let c = Config::default();
+        assert_eq!(c.server.port, 8080);
+        assert_eq!(c.server.bind, "0.0.0.0");
+        assert_eq!(c.server.workers, 1);
+        assert_eq!(c.server.backlog, 1024);
+        assert!(!c.security.enabled);
+        assert_eq!(c.plugins.dir, "plugins");
+        assert_eq!(c.backup.keep, 5);
+        assert!(!c.server.tls.enabled);
+        assert_eq!(c.iota.idle_secs, 300);
+    }
+
+    #[test]
+    fn security_serde_defaults_applied_on_empty_doc() {
+        // 未在 YAML 中出现的字段走 serde 默认值（5/5/24/30/true）。
+        let s: Security = serde_yaml::from_str("").unwrap();
+        assert_eq!(s.max_failures, 5);
+        assert_eq!(s.lock_minutes, 5);
+        assert_eq!(s.session_hours, 24);
+        assert_eq!(s.remember_days, 30);
+        assert!(s.single_session);
+    }
+
+    #[test]
+    fn load_missing_file_falls_back_to_default() {
+        let c = Config::load("/nonexistent/panel.yml");
+        assert_eq!(c.server.port, 8080);
+    }
+
+    #[test]
+    fn load_parses_override_fields() {
+        let dir = std::env::temp_dir()
+            .join(format!("vpanel_cfg_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("panel.yml");
+        std::fs::write(&path,
+            "server:\n  port: 9090\nshell:\n  enabled: false\nsecurity:\n  max_failures: 9\n")
+            .unwrap();
+        let c = Config::load(path.to_str().unwrap());
+        assert_eq!(c.server.port, 9090);
+        assert!(!c.shell.enabled);
+        assert_eq!(c.security.max_failures, 9);
+        // 未覆盖字段仍用默认
+        assert_eq!(c.server.workers, 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_invalid_yaml_falls_back_to_default() {
+        let dir = std::env::temp_dir()
+            .join(format!("vpanel_cfg_bad_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("bad.yml");
+        std::fs::write(&path, "server: [unclosed").unwrap();
+        let c = Config::load(path.to_str().unwrap());
+        assert_eq!(c.server.port, 8080);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn auto_find_returns_none_when_no_config() {
+        // auto_find 依赖当前工作目录；在没有配置文件的临时目录应回退默认且路径为 None。
+        let old = std::env::current_dir().unwrap();
+        let dir = std::env::temp_dir().join(format!("vpanel_af_{}", std::process::id()));
+        std::fs::create_dir_all(&dir)
+            .and_then(|_| std::env::set_current_dir(&dir))
+            .unwrap();
+        let (c, p) = Config::auto_find();
+        assert_eq!(c.server.port, 8080);
+        assert!(p.is_none());
+        let _ = std::env::set_current_dir(&old);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

@@ -272,6 +272,28 @@ fn exit_code(ok: bool) -> ExitCode {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exit_code_maps_bool() {
+        assert_eq!(exit_code(true), ExitCode::SUCCESS);
+        assert_eq!(exit_code(false), ExitCode::FAILURE);
+    }
+
+    #[test]
+    fn pid_log_file_under_run_dir() {
+        // 不依赖外部环境变量时，基于当前目录推导。
+        std::env::remove_var("VPVPANEL_DIR");
+        let dir = run_dir();
+        assert!(pid_file().starts_with(&dir));
+        assert!(log_file().starts_with(&dir));
+        assert!(pid_file().ends_with("vpanel.pid"));
+        assert!(log_file().ends_with("vpanel.log"));
+    }
+}
+
 fn print_usage() {
     println!(
         "vPanel {} — 极简、低常驻内存的 HTTP 面板\n

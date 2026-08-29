@@ -685,3 +685,27 @@ pub fn waf_status_json(cfg: &crate::config::Config) -> String {
     let on = std::path::Path::new(&file).is_file();
     format!("{{\"ok\":true,\"on\":{},\"file\":\"{}\"}}", on, json::jesc(&file))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn human_formats_bytes() {
+        assert_eq!(human(0), "0.0 B");
+        assert_eq!(human(1024), "1.0 KB");
+        assert_eq!(human(1536), "1.5 KB");
+        assert_eq!(human(1024 * 1024), "1.0 MB");
+        assert_eq!(human(1024 * 1024 * 1024), "1.0 GB");
+        assert_eq!(human(1), "1.0 B");
+    }
+
+    #[test]
+    fn kb_of_parses_first_kb_token() {
+        assert_eq!(kb_of("512 kb"), 512 * 1024);
+        assert_eq!(kb_of("1234 foo"), 1234 * 1024);
+        assert_eq!(kb_of("  8  "), 8 * 1024);
+        assert_eq!(kb_of("abc"), 0);
+        assert_eq!(kb_of(""), 0);
+    }
+}
