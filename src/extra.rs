@@ -4,6 +4,18 @@
 
 use crate::json;
 
+/// 路径遍历防护：文件接口只接受「绝对路径」且不含 `..` 段，防止越权读写任意文件。
+///
+/// 所有暴露给 API/MCP 的文件操作入口（读/写/删/下载/建目录/重命名）都必须先过这一关。
+fn valid_path(path: &str) -> bool {
+    !path.is_empty()
+        && path.starts_with('/')
+        && !path
+            .split('/')
+            .any(|seg| seg == "..")
+        && !path.as_bytes().contains(&0)
+}
+
 /// 读 /proc 或 /sys 文本（None 表示不存在）。
 fn pfile(path: &str) -> Option<String> {
     std::fs::read_to_string(path).ok().map(|s| s.trim().to_string())
@@ -340,6 +352,9 @@ const FOLLOW_MAX: usize = 256 * 1024;
 
 /// 目录列表 -> JSON。
 pub fn ls_json(path: &str) -> String {
+    if !valid_path(path) {
+        return "{\"ok\":false,\"msg\":\"非法的路径\"}".to_string();
+    }
     let read = match std::fs::read_dir(path) {
         Ok(r) => r,
         Err(e) => {
@@ -396,6 +411,9 @@ pub fn ls_json(path: &str) -> String {
 
 /// 读取文本文件（上限 READ_MAX）-> JSON。
 pub fn read_file_json(path: &str) -> String {
+    if !valid_path(path) {
+        return "{\"ok\":false,\"msg\":\"非法的路径\"}".to_string();
+    }
     let data = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -412,6 +430,9 @@ pub fn read_file_json(path: &str) -> String {
 
 /// 删除文件或目录（递归）。
 pub fn del_path(path: &str) -> (bool, String) {
+    if !valid_path(path) {
+        return (false, "非法的路径".to_string());
+    }
     let md = match std::fs::metadata(path) {
         Ok(m) => m,
         Err(e) => return (false, format!("无法访问 {}: {}", path, e)),
@@ -429,6 +450,9 @@ pub fn del_path(path: &str) -> (bool, String) {
 
 /// 写入文件（用于上传/编辑保存）；未设置大小上限检查由调用方完成。
 pub fn write_file(path: &str, bytes: &[u8]) -> (bool, String) {
+    if !valid_path(path) {
+        return (false, "非法的路径".to_string());
+    }
     match std::fs::write(path, bytes) {
         Ok(_) => (true, format!("已保存 {} 字节 -> {}", bytes.len(), path)),
         Err(e) => (false, format!("写入失败: {}", e)),
@@ -437,11 +461,17 @@ pub fn write_file(path: &str, bytes: &[u8]) -> (bool, String) {
 
 /// 读取整文件（下载用）。
 pub fn download(path: &str) -> Option<Vec<u8>> {
+    if !valid_path(path) {
+        return None;
+    }
     std::fs::read(path).ok()
 }
 
 /// 创建目录（递归）。可选设置模式；默认不限制。
 pub fn mkdir(path: &str) -> (bool, String) {
+    if !valid_path(path) {
+        return (false, "非法的路径".to_string());
+    }
     match std::fs::create_dir_all(path) {
         Ok(_) => (true, format!("已创建目录 {}", path)),
         Err(e) => (false, format!("创建目录失败: {}", e)),
@@ -450,6 +480,9 @@ pub fn mkdir(path: &str) -> (bool, String) {
 
 /// 重命名 / 移动文件或目录。
 pub fn rename(src: &str, dst: &str) -> (bool, String) {
+    if !valid_path(src) || !valid_path(dst) {
+        return (false, "非法的路径".to_string());
+    }
     if !std::path::Path::new(src).exists() {
         return (false, format!("源不存在: {}", src));
     }
@@ -707,5 +740,26 @@ mod tests {
         assert_eq!(kb_of("  8  "), 8 * 1024);
         assert_eq!(kb_of("abc"), 0);
         assert_eq!(kb_of(""), 0);
+    }
+
+    #[test]
+    fn valid_path_rejects_traversal_and_relative() {
+        // 相对路径一律拒绝。
+        assert!(!valid_path("etc/passwd"));
+        assert!(!valid_path("foo.txt"));
+        // `..` 段拒绝（路径遍历）。
+        assert!(!valid_path("/etc/../../etc/passwd"));
+        assert!(!valid_path("/etc/../x"));
+        assert!(!valid_path("../../etc/passwd"));
+        assert!(!valid_path("/../etc/passwd"));
+        assert!(!valid_path("/a/.."));
+        // 空串与内嵌 NUL 拒绝。
+        assert!(!valid_path(""));
+        assert!(!valid_path("/etc\x00/passwd"));
+        // 合法的绝对路径放行。
+        assert!(valid_path("/etc/passwd"));
+        assert!(valid_path("/"));
+        assert!(valid_path("/var/log/nginx/access.log"));
+        assert!(valid_path("/opt/app/数据.txt"));
     }
 }

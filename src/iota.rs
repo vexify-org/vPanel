@@ -603,10 +603,14 @@ impl Manager {
 
     // ---- 安装 / 卸载 ----
 
-    /// 从 URL 安装插件包（.tar.gz）。可选 SHA256 校验。对齐 IotaPanel 远程安装。
+    /// 从 https URL 安装插件包（.tar.gz）。强制 https + 必填 SHA256（供应链加固）。对齐 IotaPanel 远程安装。
     pub fn install_url(&self, url: &str, sha256: &str) -> (bool, String) {
-        if !(url.starts_with("http://") || url.starts_with("https://")) {
-            return (false, "仅支持 http/https 插件包地址".to_string());
+        // 供应链加固：只允许 https，且必须显式提供 SHA256 用于校验，杜绝大礼包被替换/降级。
+        if !url.starts_with("https://") {
+            return (false, "仅支持 https 插件包地址，防止包被中间人替换".to_string());
+        }
+        if sha256.trim().is_empty() {
+            return (false, "必须提供插件包的 SHA256 校验值，拒绝无校验安装".to_string());
         }
         let tmp = std::env::temp_dir().join(format!("vpanel_iota_{}.tgz", std::process::id()));
         let dl = Command::new("curl")
@@ -623,26 +627,39 @@ impl Manager {
             let _ = std::fs::remove_file(&tmp);
             return (false, "插件包超过 64MB 上限".to_string());
         }
-        if !sha256.trim().is_empty() {
-            if let Ok(o) = Command::new("sha256sum").arg(&tmp).output() {
-                let sum = String::from_utf8_lossy(&o.stdout)
-                    .split_whitespace()
-                    .next()
-                    .unwrap_or("")
-                    .to_lowercase();
-                if o.status.success() && sum != sha256.trim().to_lowercase() {
-                    let _ = std::fs::remove_file(&tmp);
-                    return (false, "SHA256 校验失败，包可能被篡改或下载不完整".to_string());
-                }
+        // 强校验：sha256 由调用方提供，此处仅比对，不再放行空值。
+        if let Ok(o) = Command::new("sha256sum").arg(&tmp).output() {
+            let sum = String::from_utf8_lossy(&o.stdout)
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .to_lowercase();
+            if o.status.success() && sum == sha256.trim().to_lowercase() {
+                let r = self.unpack_install(&tmp);
+                let _ = std::fs::remove_file(&tmp);
+                return r;
             }
+            let _ = std::fs::remove_file(&tmp);
+            return (false, "SHA256 校验失败，包可能被篡改或下载不完整".to_string());
         }
-        let r = self.unpack_install(&tmp);
         let _ = std::fs::remove_file(&tmp);
-        r
+        (false, "无法计算 SHA256，安装中止".to_string())
     }
 
     /// 把 .tar.gz 解压到临时目录，取唯一顶层目录作为插件名，安装到 plugins/<name>。
     fn unpack_install(&self, tgz: &std::path::Path) -> (bool, String) {
+        // 解压前先列目录，拒绝含 `..` 段或绝对路径的条目，防 tar-slip 越界写（配合强制 sha256 双保险）。
+        if let Ok(o) = Command::new("tar").arg("-tzf").arg(tgz).output() {
+            if o.status.success() {
+                for name in String::from_utf8_lossy(&o.stdout).lines() {
+                    let n = name.trim_end_matches('/').trim_start_matches("./");
+                    // 绝对路径或任何 `..` 段都拒绝（tar-slip 越界写）。插件包不应含 `..`。
+                    if n.starts_with('/') || n.starts_with("..") || n.split('/').any(|s| s == "..") {
+                        return (false, "插件包内包含越界路径，已拒绝安装".to_string());
+                    }
+                }
+            }
+        }
         let work = std::env::temp_dir().join(format!("vpanel_iota_x_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&work);
         let _ = std::fs::create_dir_all(&work);

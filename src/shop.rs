@@ -170,10 +170,11 @@ fn make_list_url(cfg: &Config, accel: &str) -> String {
     )
 }
 
-/// 取加速前缀，保证以 `/` 结尾。
+/// 取加速前缀，保证以 `/` 结尾；供应链加固：仅接受 https 前缀，否则回退内置默认值，
+/// 禁止裸 http 以免下载走明文被中间人替换软件包/脚本。
 fn accel_of(cfg: &Config) -> String {
     let a = cfg.download.accel.trim().trim_end_matches('/');
-    if a.is_empty() {
+    if a.is_empty() || !a.starts_with("https://") {
         DEFAULT_ACCEL.to_string()
     } else {
         format!("{}/", a)
@@ -235,6 +236,10 @@ mod tests {
         assert_eq!(accel_of(&cfg_with("https://cdn.example/", "")), "https://cdn.example/");
         // 去空格/去尾斜杠后补 `/`。
         assert_eq!(accel_of(&cfg_with("  https://cdn.example  ", "")), "https://cdn.example/");
+        // 供应链加固：裸 http 加速前缀被拒绝，回退内置 https 默认值。
+        assert_eq!(accel_of(&cfg_with("http://evil.example/", "")), DEFAULT_ACCEL);
+        assert_eq!(accel_of(&cfg_with("ftp://x/", "")), DEFAULT_ACCEL);
+        assert_eq!(accel_of(&cfg_with("javascript:alert(1)", "")), DEFAULT_ACCEL);
     }
 
     #[test]

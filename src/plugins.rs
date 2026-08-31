@@ -732,6 +732,10 @@ impl Plugins {
     /// 下载整个 zip 并按 `kind` 解压到目标目录。
     fn install_zip(&self, item: &StoreItem, accel: &str, cfg: &Config) -> (bool, String) {
         let url = zip_url(cfg, &item.zip, accel);
+        if url.is_empty() {
+            // zip_url 对裸 http 直链返回空，直接拒绝，不发起明文下载。
+            return (false, "仅支持 https 的 zip 包地址，拒绝 http 明文下载".to_string());
+        }
         let tmp = std::env::temp_dir().join(format!("vpanel_plugin_{}_{}.zip", std::process::id(), item.id));
         let dl = std::process::Command::new("curl")
             .args(["-fsSL", "--max-time", "120", "-o"])
@@ -907,10 +911,11 @@ fn disabled_path() -> String {
     format!("{}/.vpanel-plugins-disabled.json", dir)
 }
 
-/// 取加速前缀，保证以 `/` 结尾（与 shop.rs 一致）。
+/// 取加速前缀，保证以 `/` 结尾（与 shop.rs 一致）；供应链加固：仅接受 https，
+/// 拒绝裸 http，防止下载走明文被中间人替换包/脚本。
 fn accel_of(cfg: &Config) -> String {
     let a = cfg.download.accel.trim().trim_end_matches('/');
-    if a.is_empty() {
+    if a.is_empty() || !a.starts_with("https://") {
         crate::shop::DEFAULT_ACCEL.to_string()
     } else {
         format!("{}/", a)
@@ -943,11 +948,15 @@ fn raw_url(cfg: &Config, file: &str, accel: &str) -> String {
     )
 }
 
-/// zip 直链的下载地址：相对路径走加速 raw（仓库内），http(s) 绝对链接原样使用。
+/// zip 直链的下载地址：相对路径走加速 raw（仓库内），https 绝对链接原样使用；
+/// 裸 http 绝对链接返回空串，由调用方拒绝（供应链加固：防明文替换）。
 fn zip_url(cfg: &Config, zip: &str, accel: &str) -> String {
     let t = zip.trim();
-    if t.starts_with("http://") || t.starts_with("https://") {
+    if t.starts_with("https://") {
         t.to_string()
+    } else if t.starts_with("http://") {
+        // 裸 http 直链不收：包会被明文传输，中间人可直接替换为恶意插件（RCE）。
+        String::new()
     } else {
         // 仓库内相对路径：加速前缀 + raw.github，与 plugins.yml 同理。
         raw_url(cfg, zip, accel)
@@ -955,7 +964,30 @@ fn zip_url(cfg: &Config, zip: &str, accel: &str) -> String {
 }
 
 /// 解压 zip 到目标目录（用系统 `unzip`，保持二进制为零额外依赖）。
+/// 解压前先枚举条目，拒绝含 `..` 或绝对路径的条目（zip-slip / 解压路径穿越 RCE）。
 fn unzip_to(zip: &std::path::Path, dest: &str) -> std::io::Result<()> {
+    // `unzip -Z1` 列出所有条目名；任一报名含回溯或绝对路径则整体拒绝解压。
+    if let Ok(o) = std::process::Command::new("unzip")
+        .args(["-Z1", &zip.to_string_lossy()])
+        .output()
+    {
+        if o.status.success() {
+            let entries = String::from_utf8_lossy(&o.stdout);
+            for name in entries.lines() {
+                let n = name
+                    .trim_end_matches('/')
+                    .trim_end_matches('\\')
+                    .trim_start_matches("./");
+                // 绝对路径或含 `..` 段 → zip-slip，拒绝。
+                if n.starts_with('/') || n.split(['/', '\\']).any(|seg| seg == "..") {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "压缩包内含越界路径，已拒绝解压",
+                    ));
+                }
+            }
+        }
+    }
     let st = std::process::Command::new("unzip")
         .args(["-o", "-q"])
         .arg(zip)
