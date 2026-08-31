@@ -119,7 +119,7 @@ impl SecurityGuard {
         if now() > exp {
             return false;
         }
-        if mac(&inner.persist.secret, sid, exp) != mac_s {
+        if !ct_eq(&mac(&inner.persist.secret, sid, exp), &mac_s) {
             return false;
         }
         if !inner.persist.sessions.contains_key(sid) {
@@ -198,7 +198,7 @@ impl SecurityGuard {
     /// 修改密码。旧密码正确且新密码合法才允许。
     /// 保留当前会话（保持登录态），清除并强制下线所有其它会话，返回当前会话的 cookie。
     pub fn change_password(&self, cookie: Option<&str>, old: &str, new: &str, _ua: &str) -> Option<String> {
-        if new.len() < 4 {
+        if new.len() < 8 {
             return None;
         }
         {
@@ -273,7 +273,7 @@ impl SecurityGuard {
         if self.has_password() {
             return None;
         }
-        if pw.len() < 4 {
+        if pw.len() < 8 {
             return None;
         }
         self.set_password(pw);
@@ -373,7 +373,12 @@ fn verify(stored: &str, pw: &str) -> bool {
     }
     let got = fmt_hex(&out);
     // 常量时间比较
-    got.len() == want.len() && got.bytes().zip(want.bytes()).fold(0u8, |a, (x, y)| a | (x ^ y)) == 0
+    ct_eq(&got, &want)
+}
+
+/// 常量时间字符串比较，杜绝时序侧信道。
+fn ct_eq(a: &str, b: &str) -> bool {
+    a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 /// HMAC-SHA1（RFC 2104）。
@@ -476,7 +481,29 @@ fn load() -> Persist {
 
 fn save(p: &Persist) {
     if let Ok(s) = serde_json::to_string(p) {
-        let _ = std::fs::write(auth_path(), s);
+        write_private(auth_path(), s.as_bytes());
+    }
+}
+
+/// 以 0600 权限写入敏感状态文件，避免其它本地用户读到 HMAC secret 与会话。
+fn write_private(path: String, data: &[u8]) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&path)
+        {
+            let _ = f.write_all(data);
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = std::fs::write(&path, data);
     }
 }
 

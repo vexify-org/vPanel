@@ -218,7 +218,7 @@ fn handle(stream: &mut dyn Io, state: &State) {
         let bearer_ok = header_val(&head, "authorization")
             .map(|a| {
                 let token = a.trim_start_matches("Bearer ").trim().to_string();
-                !token.is_empty() && token == state.cfg.security.mcp_token
+                !token.is_empty() && ct_seq(&token, &state.cfg.security.mcp_token)
             })
             .unwrap_or(false);
         if !state.auth.enabled() || authed || bearer_ok {
@@ -433,6 +433,11 @@ fn read_head(stream: &mut dyn Io, buf: &mut [u8]) -> usize {
         }
     }
     total
+}
+
+/// 常量时间比较，避免时序侧信道泄露令牌。
+fn ct_seq(a: &str, b: &str) -> bool {
+    a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 /// 从 URI 的查询串中按键取值（极简 percent 解码）。

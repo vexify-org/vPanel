@@ -28,12 +28,12 @@ pub struct Config {
 
 /// 登录安全配置。
 ///
-/// `enabled` 默认关闭以保持向后兼容；开启后未设置密码会进入初始设置向导，
-/// 设置完成后所有页面与 API 均需登录。
-#[derive(Debug, Clone, Default, Deserialize)]
+/// `enabled` 默认开启（fail-closed）：未显式配置 `security:` 段的面板也会默认
+/// 要求登录。未设置密码时进入初始设置向导，设置完成后所有页面与 API 均需登录。
+#[derive(Debug, Clone, Deserialize)]
 pub struct Security {
-    /// 是否开启登录保护。默认 false。
-    #[serde(default)]
+    /// 是否开启登录保护。默认 true。
+    #[serde(default = "d_true")]
     pub enabled: bool,
     /// 管理员密码（明文，仅用于首次设置；设置成功后存入哈希文件，可留空走向导）。
     #[serde(default)]
@@ -59,6 +59,22 @@ pub struct Security {
     /// 面板位于受信 HTTPS 反向代理之后时置真，用于识别 HTTPS 并开放代理头部。
     #[serde(default)]
     pub trust_proxy: bool,
+}
+
+impl Default for Security {
+    fn default() -> Self {
+        Security {
+            enabled: true,
+            password: String::new(),
+            mcp_token: String::new(),
+            max_failures: 5,
+            lock_minutes: 5,
+            session_hours: 24,
+            remember_days: 30,
+            single_session: true,
+            trust_proxy: false,
+        }
+    }
 }
 
 fn d_remember_days() -> u32 {
@@ -533,7 +549,7 @@ mod tests {
         assert_eq!(c.server.bind, "0.0.0.0");
         assert_eq!(c.server.workers, 1);
         assert_eq!(c.server.backlog, 1024);
-        assert!(!c.security.enabled);
+        assert!(c.security.enabled);
         assert_eq!(c.plugins.dir, "plugins");
         assert_eq!(c.backup.keep, 5);
         assert!(!c.server.tls.enabled);
@@ -542,8 +558,9 @@ mod tests {
 
     #[test]
     fn security_serde_defaults_applied_on_empty_doc() {
-        // 未在 YAML 中出现的字段走 serde 默认值（5/5/24/30/true）。
+        // 未在 YAML 中出现的字段走 serde 默认值（true/5/5/24/30/true）。
         let s: Security = serde_yaml::from_str("").unwrap();
+        assert!(s.enabled);
         assert_eq!(s.max_failures, 5);
         assert_eq!(s.lock_minutes, 5);
         assert_eq!(s.session_hours, 24);

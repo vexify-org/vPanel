@@ -21,6 +21,14 @@ shell:                     # Web 终端（浏览器内本地 Shell 控制）
   columns: 100
   rows: 30
 
+security:                  # 登录保护。未配置本段时默认开启（fail-closed）。
+  enabled: true            # 首次启动未设密码会进入初始设置向导。
+  # password: "请用向导设置，勿明文写入此文件"
+  # mcp_token: ""          # MCP 独立 Bearer 令牌（可选）
+  max_failures: 5          # 连续失败锁定阈值
+  lock_minutes: 5          # 锁定时长（分钟）
+  single_session: true     # 新登录踢掉旧会话
+
 download:                  # 软件商店：加速前缀 + 清单仓库
   accel: "https://g.z321.cc.cd/"          # 全局下载加速前缀
   store: "vexify-org/vp-store@main"        # 清单仓库（owner/repo@branch）
