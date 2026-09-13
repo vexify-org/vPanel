@@ -199,9 +199,6 @@ fn handle(stream: &mut dyn Io, state: &State) {
     let method = wt.next().unwrap_or("GET").to_string();
     let target = wt.next().unwrap_or("/");
 
-    // 插件事件钩子：每个进入的 HTTP 请求（慎用，脚本里勿放慢操作）。
-    state.plugins.run_hooks("on_http_request");
-
     // 解析 Cookie / User-Agent / 来源 IP。
     let cookie = header_val(&head, "cookie");
     let ua = header_val(&head, "user-agent").unwrap_or("ua");
@@ -255,6 +252,13 @@ fn handle(stream: &mut dyn Io, state: &State) {
                 return;
             }
         }
+    }
+
+    // 插件事件钩子：仅允许「无需登录」或「已登录」的请求触发。
+    // 未认证请求一律不触发——否则攻击者扫到端口随便发个请求，就会触发插件脚本以
+    // 面板权限执行系统命令，等于一个无需登录的 web shell。命令执行入口必须有登录态。
+    if !state.auth.enabled() || authed {
+        state.plugins.run_hooks("on_http_request");
     }
 
     // Web Socket 与会话式终端：升级为长连接并驱动 PTY。
