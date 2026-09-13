@@ -8,7 +8,8 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use sha1::{Digest, Sha1};
+use sha1::{Digest as _, Sha1};
+use sha2::Sha256;
 
 use crate::config::Security;
 use crate::json;
@@ -77,9 +78,21 @@ impl SecurityGuard {
             }),
             cfg,
         };
-        // 配置明文密码：仅当尚无哈希时作为一次性初始密码写入。
+        // 配置密码预设：仅当尚无哈希时写入。
+        // - `sha256:<hex>`：按 sha256 哈希直接作为登录密码（yml 不落明文，推荐）。
+        // - 其它：视为明文，做 PBKDF1 哈希后存入哈希文件（向后兼容）。
         if !g.cfg.password.is_empty() && g.inner.lock().unwrap().persist.pw.is_empty() {
-            g.set_password(&g.cfg.password);
+            if let Some(h) = g.cfg.password.strip_prefix("sha256:") {
+                let h = h.trim().to_lowercase();
+                if h.len() == 64 && h.bytes().all(|b| b.is_ascii_hexdigit()) {
+                    let mut inner = g.inner.lock().unwrap();
+                    inner.persist.pw = format!("sha256:{}", h);
+                    inner.persist.sessions.clear();
+                    save(&inner.persist);
+                }
+            } else {
+                g.set_password(&g.cfg.password);
+            }
         }
         g
     }
@@ -350,8 +363,13 @@ fn hash_pw(pw: &str) -> String {
     format!("{}${}${}", salt, ROUNDS, fmt_hex(&out))
 }
 
-/// 校验 `salt$rounds$hex` 是否匹配明文。
+/// 校验 `stored` 是否匹配明文 `pw`。支持两种形式：
+/// - `sha256:<hex>`：yml 预置的 sha256 密码（恒定时间比对）；
+/// - `salt$rounds$hex`：PBKDF1-SHA1 哈希（向导 / 改密生成）。
 fn verify(stored: &str, pw: &str) -> bool {
+    if let Some(h) = stored.strip_prefix("sha256:") {
+        return ct_eq(&sha256_hex(pw), &h.trim().to_lowercase());
+    }
     let mut it = stored.trim().split('$');
     let salt = match it.next() {
         Some(s) if !s.is_empty() => s,
@@ -374,6 +392,14 @@ fn verify(stored: &str, pw: &str) -> bool {
     let got = fmt_hex(&out);
     // 常量时间比较
     ct_eq(&got, &want)
+}
+
+/// sha256 十六进制摘要（用于 yml 预置密码校验）。
+fn sha256_hex(s: &str) -> String {
+    use sha2::Digest as _;
+    let mut d = Sha256::new();
+    d.update(s.as_bytes());
+    fmt_hex(&d.finalize())
 }
 
 /// 常量时间字符串比较，杜绝时序侧信道。
@@ -624,6 +650,42 @@ mod tests {
         let sid = a.split('.').next().unwrap().to_string();
         assert!(g.revoke(&sid));
         assert!(!g.validate(Some(&a)));
+    }
+
+    #[test]
+    fn yml_sha256_preseed_password_works() {
+        let _lk = test_lock();
+        // 模拟 yml 里写 `sha256:<hex>`：`secret123` 的 sha256。
+        let digest = sha256_hex("secret123");
+        let hexs = format!("sha256:{}", digest);
+        // verify 直接比对 sha256 预置哈希。
+        assert!(verify(&hexs, "secret123"));
+        assert!(!verify(&hexs, "wrong-pass"));
+        assert!(!verify(&hexs, "SECRET123")); // 大小写敏感
+        // Gate::new 吃下 sha256 预置后即 has_password，且无需向导。
+        static SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!("vpanel_auth_sha256_{}_{}", std::process::id(), seq));
+        std::env::set_var("VPVPANEL_DIR", &dir);
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::remove_file(dir.join(AUTH_PATH));
+        let cfg = Security {
+            enabled: true,
+            password: hexs,
+            mcp_token: String::new(),
+            max_failures: 3,
+            lock_minutes: 5,
+            session_hours: 24,
+            remember_days: 30,
+            single_session: false,
+            trust_proxy: false,
+        };
+        let g = SecurityGuard::new(cfg);
+        assert!(g.has_password());
+        assert!(!g.needs_setup()); // 预置密码后不再引导
+        // 用明文密码直接登录成功。
+        assert!(matches!(g.login("secret123", "ip", "ua").kind, Login::Ok));
+        assert!(matches!(g.login("nope", "ip2", "ua").kind, Login::Bad));
     }
 
     #[test]

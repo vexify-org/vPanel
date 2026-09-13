@@ -35,7 +35,10 @@ pub struct Security {
     /// 是否开启登录保护。默认 true。
     #[serde(default = "d_true")]
     pub enabled: bool,
-    /// 管理员密码（明文，仅用于首次设置；设置成功后存入哈希文件，可留空走向导）。
+    /// 管理员密码预设。
+    /// 支持两种形式：
+    ///   - 明文：仅用于首次设置（对齐原行为，启动时哈希后存入哈希文件）；
+    ///   - `sha256:<64位hex>`：直接以 sha256 哈希作为登录密码，推荐本方式（无视存储哈希文件的差异，yml 本身不落明文）。
     #[serde(default)]
     pub password: String,
     /// MCP 端点的独立 Bearer 令牌（可选）。留空则 MCP 需走面板登录会话。

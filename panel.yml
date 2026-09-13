@@ -23,7 +23,14 @@ shell:                     # Web 终端（浏览器内本地 Shell 控制）
 
 security:                  # 登录保护。未配置本段时默认开启（fail-closed）。
   enabled: true            # 首次启动未设密码会进入初始设置向导。
-  # password: "请用向导设置，勿明文写入此文件"
+  # 密码二选一（推荐只用其一）：
+  #   1) 留空（默认）：首次启动进入向导，设置后写入 .vpanel-auth.json 哈希文件。
+  #   2) 预置 sha256 密码（推荐不落明文）：password: "<明文密码的 sha256 十六进制>"
+  #      → # 生成：printf '%s' '你的密码' | sha256sum
+  #      → # 例：password: "sha256:5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8"
+  #      → 首次启动即用该密码登录，不再进入向导。
+  # 兼容：若填非 sha256: 前缀的纯文本，仅作为一次性初始密码（首启哈希后忽略）。
+  # password: ""
   # mcp_token: ""          # MCP 独立 Bearer 令牌（可选）
   max_failures: 5          # 连续失败锁定阈值
   lock_minutes: 5          # 锁定时长（分钟）
