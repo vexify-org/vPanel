@@ -380,7 +380,11 @@ fn handle(stream: &mut dyn Io, state: &State) {
     // 处理完即关闭连接。
 }
 
+/// 请求体大小上限（8MB）。过大或恶意 `Content-Length` 一律拒读，防内存耗尽。
+const MAX_BODY: usize = 8 << 20;
+
 /// 读取请求头之后的请求体：先取缓冲区剩余，再按 Content-Length 补充。
+/// 安全：`Content-Length` 在上限内且用饱和加法，杜绝溢出 panic 与无限分配。
 fn read_body(stream: &mut dyn Io, head: &str, buf: &[u8]) -> Vec<u8> {
     let clen: usize = head
         .split("\r\n")
@@ -395,7 +399,8 @@ fn read_body(stream: &mut dyn Io, head: &str, buf: &[u8]) -> Vec<u8> {
             }
         })
         .unwrap_or(0);
-    if clen == 0 {
+    // 超限或声明长度异常：直接返回空体，避免内存耗尽 / 溢出切片 panic。
+    if clen == 0 || clen > MAX_BODY {
         return Vec::new();
     }
     // 头结束位置。
@@ -403,7 +408,10 @@ fn read_body(stream: &mut dyn Io, head: &str, buf: &[u8]) -> Vec<u8> {
         Some(i) => i + 4,
         None => return Vec::new(),
     };
-    let mut body = buf[head_end.min(buf.len())..buf.len().min(head_end + clen)].to_vec();
+    // 上限用 saturating_add，杜绝 head_end + clen 溢出回绕导致的切片 panic。
+    let buf_start = head_end.min(buf.len());
+    let buf_end = buf.len().min(head_end.saturating_add(clen));
+    let mut body = buf[buf_start..buf_end].to_vec();
     while body.len() < clen {
         let mut t = [0u8; 2048];
         match stream.read(&mut t) {
@@ -742,5 +750,32 @@ mod tests {
         assert_eq!(r.status, "200 OK");
         assert!(r.set_cookie.is_none());
         assert_eq!(String::from_utf8_lossy(&r.body), "{\"ok\":false,\"msg\":\"登录失败\"}");
+    }
+
+    #[test]
+    fn read_body_rejects_oversized_and_overflow_content_length() {
+        use std::io::{self, Read, Write};
+        use crate::tls::Io;
+        struct Stub(usize);
+        impl Read for Stub { fn read(&mut self, b: &mut [u8]) -> io::Result<usize> { self.0 = 0; Ok(b.len().min(self.0)) } }
+        impl Write for Stub { fn write(&mut self, b: &[u8]) -> io::Result<usize> { Ok(b.len()) } fn flush(&mut self) -> io::Result<()> { Ok(()) } }
+        impl Io for Stub {
+            fn set_rto(&mut self, _d: std::time::Duration) {}
+            fn peer_ip(&self) -> Option<String> { None }
+            fn dup(&self) -> Option<Box<dyn Io + Send>> { None }
+        }
+        // 超限 Content-Length：不 panic、读不到 body。
+        let head = "POST / HTTP/1.1\r\nContent-Length: 99999999999\r\n\r\n";
+        let body = read_body(&mut Stub(0), head, b"");
+        assert!(body.is_empty());
+        // Content-Length 溢出 usize：同样安全返回空体，绝不 panic。
+        let head2 = ["POST / HTTP/1.1\r\nContent-Length: ", "18446744073709551615", "\r\n\r\n"].concat();
+        let body2 = read_body(&mut Stub(0), head2.as_str(), b"");
+        assert!(body2.is_empty());
+        // 正常请求体照常读取（buffer 内直接取，无需读流）。
+        let head3 = "POST / HTTP/1.1\r\nContent-Length: 5\r\n\r\nhello";
+        let buf3 = b"POST / HTTP/1.1\r\nContent-Length: 5\r\n\r\nhello";
+        let body3 = read_body(&mut Stub(0), head3, buf3);
+        assert_eq!(body3, b"hello");
     }
 }

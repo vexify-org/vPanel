@@ -108,8 +108,8 @@ pub fn create_user(cfg: &Database, user: &str, pass: &str, host: &str) -> (bool,
     let h = if host.trim().is_empty() { "localhost".into() } else { sani(host) };
     if u.is_empty() { return (false, "非法用户名".into()); }
     if h.is_empty() { return (false, "非法 host".into()); }
-    // 密码仅过滤危险字符
-    let p: String = pass.trim().chars().filter(|c| !matches!(c, '\'' | ';')).collect();
+    // 密码仅过滤危险字符（单引号、分号、反斜杠——反斜杠可转义结束引号逃逸）。
+    let p: String = pass.trim().chars().filter(|c| !matches!(c, '\'' | ';' | '\\')).collect();
     let (ok, msg) = run_sql(cfg, &format!("CREATE USER IF NOT EXISTS '{u}'@'{h}' IDENTIFIED BY '{p}'"));
     if !ok { return (ok, msg); }
     run_sql(cfg, "FLUSH PRIVILEGES")

@@ -393,14 +393,12 @@ impl Manager {
 
         // 等待端口就绪。
         if !wait_ready(&bind, port) {
-            let (pid2, tick) = {
-                let rt = self.runtimes.lock().unwrap();
-                let r = rt.get(name).expect("just inserted");
-                (r.pid, r.start_tick)
-            };
-            let _ = kill_safe(pid2, tick);
-            self.runtimes.lock().unwrap().remove(name);
-            self.save_port_map();
+            // 并发同名 start 可能已移除条目：用 if-let 安全处理，不再 expect panicking。
+            if let Some((pid2, tick)) = self.runtimes.lock().unwrap().get(name).map(|r| (r.pid, r.start_tick)) {
+                let _ = kill_safe(pid2, tick);
+                self.runtimes.lock().unwrap().remove(name);
+                self.save_port_map();
+            }
             return Err(format!("插件 {} 启动超时（{}）", name, READY_TIMEOUT.as_secs()));
         }
 

@@ -56,8 +56,21 @@ pub fn run(mut ws: Ws, shell: &Shell) {
 
     // master 需要跨线程处理 resize，用 Arc<Mutex> 包裹。
     let master: Arc<Mutex<Box<dyn MasterPty + Send>>> = Arc::new(Mutex::new(pair.master));
-    let mut reader = master.lock().unwrap().try_clone_reader().unwrap();
-    let mut pty_writer = master.lock().unwrap().take_writer().unwrap();
+    // 句柄获取失败（如 fd 耗尽）时优雅退出而非 panic（release 下 panic=abort 会杀整个面板）。
+    let mut reader = match master.lock().unwrap().try_clone_reader() {
+        Ok(r) => r,
+        Err(_) => {
+            let _ = ws::send_close(&mut *ws.writer);
+            return;
+        }
+    };
+    let mut pty_writer = match master.lock().unwrap().take_writer() {
+        Ok(w) => w,
+        Err(_) => {
+            let _ = ws::send_close(&mut *ws.writer);
+            return;
+        }
+    };
 
     // 输出方向：PTY -> WebSocket（独立线程）。
     let ws_out = ws.writer.dup();

