@@ -107,6 +107,7 @@
 
 | 版本 | 时间 | 关键变更 |
 |------|------|----------|
+| v1.7.0 | 2026-08 | 安全加固：封堵未认证插件 hook（web shell）与 conn_kill 命令注入；请求体/Content-Length 上限与溢出防护；供应链下载强制 https + 必填 SHA256、tar/zip 解压防越界；关键文件接口路径遍历校验；nginx 配置与 mysql 密码注入防护；`security.password` 支持 `sha256:<hex>` 预置密码 |
 | v1.6.1 | 2026-08 | 资源告警（SMTP 三种传输模式，支持加密）；重写数据库/环境/证书/备份/安全页面；表单 `Content-Type` 修复；MCP 白名单与冗余清理；静态编译全平台交付 |
 | v1.5.0 | 更早 | HTTP 服务 YML 配置内存优化；插件系统完善 |
 | v1.x | 起 | 从极简监控面板逐步扩展为完整控制台 |
@@ -294,8 +295,8 @@ vpanel
 
 ```bash
 # 把公钥放入 /etc/apk/keys 后，从本地包安装（按架构选择）
-apk add vpanel-x86_64-1.6.1-r0.apk   # x86_64
-apk add vpanel-aarch64-1.6.1-r0.apk  # aarch64
+apk add vpanel-x86_64-1.7.0-r0.apk   # x86_64
+apk add vpanel-aarch64-1.7.0-r0.apk  # aarch64
 ```
 
 ---
@@ -446,7 +447,7 @@ vPanel — 极简、低常驻内存的 HTTP 面板
 ### `panel status` 输出示例
 
 ```
-vPanel 1.6.1 (pkg: vpanel)
+vPanel 1.7.0 (pkg: vpanel)
 listen: http://0.0.0.0:8080
 tls:    off
 shell:  true /bin/sh
