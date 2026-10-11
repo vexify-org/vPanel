@@ -5,7 +5,6 @@
 //! 所有来自用户输入的库名/用户名先经 `sani` 清洗，防 SQL 注入。
 
 use crate::config::Database;
-use crate::json;
 
 /// 数据库是否已安装（能在 PATH 找到 mysql 客户端）。
 pub fn installed(cfg: &Database) -> bool {
@@ -163,11 +162,12 @@ pub fn restore(cfg: &Database, db: &str, file: &str) -> (bool, String) {
 }
 
 /// 备份文件列表 JSON。
-pub fn backups_json(cfg: &Database, dir: &str) -> String {
+#[allow(dead_code)]
+pub fn backups_json(_cfg: &Database, dir: &str) -> String {
     let mut files = Vec::new();
     if let Ok(rd) = std::fs::read_dir(dir) {
         for e in rd.flatten() {
-            let p = e.path();
+            let _p = e.path();
             let name = e.file_name().to_string_lossy().into_owned();
             if !name.ends_with(".sql.gz") { continue; }
             if let Ok(md) = e.metadata() {
