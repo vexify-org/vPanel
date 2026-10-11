@@ -194,9 +194,11 @@ pub struct Tls {
     #[serde(default)]
     pub cert_file: String,
     #[serde(default)]
+    #[allow(dead_code)]
     pub key_file: String,
     /// 自签证书的通用名 / SAN（用于识别）。默认 "vpanel"。
     #[serde(default = "d_tls_host")]
+    #[allow(dead_code)]
     pub host: String,
 }
 
@@ -453,6 +455,7 @@ pub struct Certs {
     pub dir: String,
     /// Let's Encrypt 关联网站（acme.sh 方式，需已安装）。
     #[serde(default)]
+    #[allow(dead_code)]
     pub le: bool,
 }
 
