@@ -504,7 +504,7 @@ impl Plugins {
     /// 记录上次触发时刻到 `task_fire`（单调时钟），保证周期稳定、不随 tick 漂移。
     fn spawn_scheduler(self: &Arc<Self>) {
         let this = self.clone();
-        std::thread::Builder::new()
+        let _ = std::thread::Builder::new()
             .stack_size(256 * 1024)
             .name("spawn".into())
             .spawn(move || loop {
