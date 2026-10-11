@@ -25,6 +25,7 @@ pub enum Login {
 
 /// 一次登录的完整结果：类型 + 成功时的新 cookie。
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct LoginOutcome {
     pub kind: Login,
     pub cookie: Option<String>,
@@ -57,6 +58,7 @@ struct Inner {
 }
 
 /// 对外安全门面（挂到 State）。
+#[allow(dead_code)]
 pub struct SecurityGuard {
     cfg: Security,
     inner: Mutex<Inner>,
@@ -65,6 +67,7 @@ pub struct SecurityGuard {
 const ROUNDS: u32 = 16000;
 const AUTH_PATH: &str = ".vpanel-auth.json";
 
+#[allow(dead_code)]
 impl SecurityGuard {
     pub fn new(cfg: Security) -> SecurityGuard {
         let mut persist = load();
