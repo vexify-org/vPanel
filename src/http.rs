@@ -9,7 +9,6 @@
 //!   GET /metrics   -> 纯文本状态（请求数 / 并发 / RSS）
 //!   其余           -> 404
 
-use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -20,9 +19,9 @@ use crate::tls::Io;
 
 const MAX_REQ: usize = 8192;
 
-/// 周期性把 glibc 空闲堆还给内核（glibc 分配器会保留已释放 chunk，
-/// 表现在 RSS 私有脏页上；trim 把它们归还 OS 压低常驻内存）。
-/// 仅 gnu/glibc 有效；musl 与之互斥，跳过。
+// 周期性把 glibc 空闲堆还给内核（glibc 分配器会保留已释放 chunk，
+// 表现在 RSS 私有脏页上；trim 把它们归还 OS 压低常驻内存）。
+// 仅 gnu/glibc 有效；musl 与之互斥，跳过。
 #[cfg(all(unix, not(target_env = "musl")))]
 unsafe extern "C" {
     fn malloc_trim(pad: usize) -> i32;
@@ -63,7 +62,7 @@ pub fn serve(cfg: Config) -> std::io::Result<()> {
     // 后台告警检测线程：定期检查资源阈值，超限则发邮件。低栈低耗。
     {
         let m = monitor.clone();
-        std::thread::Builder::new()
+        let _ = std::thread::Builder::new()
             .stack_size(192 * 1024)
             .name("alert".into())
             .spawn(move || loop {
@@ -117,7 +116,7 @@ pub fn serve(cfg: Config) -> std::io::Result<()> {
     for _ in 0..workers {
         let queue = queue.clone();
         let state = state.clone();
-        std::thread::Builder::new()
+        let _ = std::thread::Builder::new()
             .stack_size(384 * 1024)
             .name("web".into())
             .spawn(move || worker(queue, state));
