@@ -24,7 +24,7 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_core = "=1.0.229"
 serde_derive = "=1.0.229"
 serde_json = "=1.0.151"
-serde_yaml = "=0.9.34+deprecated"
+serde_yaml = "0.9.34"
 # Web 终端（PTY + WebSocket）——可选特性，默认不含（省便携 PTY 依赖体积）。
 portable-pty = { version = "0.8", optional = true }
 sha1 = "0.10"
