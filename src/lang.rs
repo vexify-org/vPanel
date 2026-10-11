@@ -13,7 +13,6 @@
 
 use std::collections::HashMap;
 use sha2::Sha256;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 // ---------------------------------------------------------------------------
 // 外部能力接口（由 plugins 实现）
@@ -98,6 +97,7 @@ impl V {
             V::Nil => false,
         }
     }
+    #[allow(dead_code)]
     fn is_list(&self) -> bool {
         matches!(self, V::L(_))
     }
@@ -580,6 +580,7 @@ pub struct Interp<'a> {
 }
 
 impl<'a> Interp<'a> {
+    #[allow(dead_code)]
     pub fn new(builtin: &'a dyn Builtin) -> Self {
         Interp::with_prefix("".to_string(), builtin)
     }
