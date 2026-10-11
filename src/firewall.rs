@@ -262,6 +262,8 @@ pub fn rules_json() -> String {
     )
 }
 
+/// 防火墙状态 JSON。
+#[allow(dead_code)]
 pub fn status_json() -> String {
     let st = load();
     format!(
