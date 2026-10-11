@@ -61,6 +61,7 @@ impl Proxies {
             .cloned()
     }
 
+    #[allow(dead_code)]
     pub fn export(&self) -> Vec<ProxyDef> {
         let l = self.list.lock().unwrap();
         l.clone()
