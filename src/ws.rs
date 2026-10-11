@@ -1,7 +1,7 @@
 //! 手写 WebSocket (RFC 6455) 服务端，仅服务端帧所需的最小实现。
 //! 客户端帧必须带掩码；服务端帧不掩码。
 
-use std::io::{self, Write};
+use std::io::self;
 use std::time::Duration;
 
 use base64::Engine;
