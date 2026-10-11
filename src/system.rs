@@ -70,7 +70,7 @@ impl Monitor {
         let m = Monitor::new();
         let handle = Arc::downgrade(&m);
         let m2 = m.clone();
-        std::thread::Builder::new()
+        let _ = std::thread::Builder::new()
             .stack_size(STACK_KB)
             .name("mon".into())
             .spawn(move || {
